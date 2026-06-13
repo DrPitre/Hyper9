@@ -71,31 +71,33 @@ struct TerminalView: View {
     var body: some View {
         GroupBox {
             ZStack {
+                // Key capture sits BEHIND the scroll view so scroll events
+                // reach the ScrollView; key events go to the first responder.
+                KeyCaptureView(isFocused: focused) { byte in
+                    model.sendInputChar(byte)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(output + (cursor.visible ? "█" : " "))
                                 .padding()
-                                .frame(
-                                    width: CGFloat(80) * charWidth,
-                                    alignment: .topLeading
-                                )
+                                .frame(width: CGFloat(80) * charWidth, alignment: .topLeading)
                             Color.clear.frame(height: 1).id("bottom")
                         }
                     }
-                    .onChange(of: output) { _ in proxy.scrollTo("bottom", anchor: .bottom) }
+                    .scrollIndicators(.visible)
+                    .onChange(of: output) { _ in
+                        proxy.scrollTo("bottom", anchor: .bottom)
+                    }
                 }
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(.white)
-
-                KeyCaptureView(isFocused: focused) { byte in
-                    model.sendInputChar(byte)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background(Color.black.opacity(0.95))
             .border(focused ? Color.green : Color.gray)
-            .onTapGesture { focused = true }
+            .simultaneousGesture(TapGesture().onEnded { focused = true })
             .onReceive(model.$outputString) { output = $0 }
         } label: {
             Label("Terminal", systemImage: "apple.terminal")
