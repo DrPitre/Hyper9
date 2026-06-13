@@ -50,7 +50,7 @@ public class Bus {
     var timerTriggersIRQ: Bool = false
 
     init(memory: [UInt8] = []) {
-        if memory == [] {
+        if memory.isEmpty {
             self.memory = Array(repeating: UInt8(0x12), count: 0xFFF0)
             self.memory.append(contentsOf: Array(repeating:UInt8(0x00), count: 0x10))
         } else {
