@@ -109,8 +109,7 @@ public class Bus {
             mappedIOWriteHandler(address, data: data)
         } else {
             // It's memory -- write the data.
-            mappedIOWriteHandler(address, data: data)
-//            memory[Int(address)] = data
+            memory[Int(address)] = data
         }
     }
     
