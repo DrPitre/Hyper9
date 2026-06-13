@@ -69,9 +69,9 @@ struct TestSTD {
         cpu.setupAddressing(using: .imm16)
         
         cpu.D = 0x0000
-        try cpu.perform(instruction: .sta, addressMode: .imm16)
-        
-        #expect(cpu.readByte(0) == 0x0000)
+        try cpu.perform(instruction: .std, addressMode: .imm16)
+
+        #expect(cpu.readWord(0) == 0x0000)
         #expect(cpu.readCC(.negative) == false)
         #expect(cpu.readCC(.zero) == true)
     }
