@@ -70,6 +70,7 @@ class Turbo9ViewModel: ObservableObject {
             try turbo9.reset()
             outputLock.lock(); outputBuffer = ""; outputLock.unlock()
             inputLock.lock(); inputQueue = []; inputLock.unlock()
+            lastInputDeliveryCycle = 0
             outputString = ""
             instructionsPerSecond = 0.0
         } catch {
@@ -188,7 +189,7 @@ class Turbo9ViewModel: ObservableObject {
     }
 
     func deliverNextInputIfReady() {
-        guard turbo9.clockCycles - lastInputDeliveryCycle >= 500 else { return }
+        guard turbo9.clockCycles &- lastInputDeliveryCycle >= 500 else { return }
         inputLock.lock()
         guard !inputQueue.isEmpty else { inputLock.unlock(); return }
         let char = inputQueue.removeFirst()
@@ -202,16 +203,8 @@ class Turbo9ViewModel: ObservableObject {
     }
 
     func updateMemoryView() {
-        let pc = turbo9.PC
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
-            let dump = self.turbo9.memoryWindow(around: pc)
-            let ops = self.turbo9.operations
-            DispatchQueue.main.async {
-                self.memoryDump = dump
-                self.operations = ops
-            }
-        }
+        memoryDump = turbo9.memoryWindow(around: turbo9.PC)
+        operations = turbo9.operations
     }
 
     func startTask() {
