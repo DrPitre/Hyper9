@@ -91,6 +91,12 @@ public class Turbo9CPU {
     public var memoryDump: String {
         self.bus.ramDump(address: 0, numBytes: 0x10000)
     }
+
+    public func memoryWindow(around address: UInt16, size: Int = 512) -> String {
+        let start = max(0, (Int(address) - size / 2) & ~0xF)
+        let numBytes = min(size, 0x10000 - start)
+        return bus.ramDump(address: UInt32(start), numBytes: numBytes)
+    }
     
     /// The 16-bit index register `X`.
     public var X: UInt16 = 0x00
@@ -430,14 +436,4 @@ public class Turbo9CPU {
     }
     
     // MARK: - Debugging
-    
-    /*
-     func getFlagString() -> String {
-     let statusFlags = CCFlag.allCases
-     let firstRow = statusFlags.map(\.letter).joined()
-     let secondRow = statusFlags.map { String(readCC($0).value) }.joined()
-     
-     return [firstRow, secondRow].joined(separator: " - ")
-     }
-     */
 }

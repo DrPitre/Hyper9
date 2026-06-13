@@ -44,7 +44,6 @@ public class Bus {
     var busReadHandlers: [UInt16: () -> UInt8] = [:]
     var busWriteHandlers: [UInt16: (UInt8) -> Void] = [:]
     weak var cpu: Turbo9CPU?
-//    var clockInterrupt : Timer? = nil
     var memory: [UInt8]
     var originalRam: [UInt8]
     var timerTriggersIRQ: Bool = false
@@ -76,10 +75,7 @@ public class Bus {
     public func addWriteHandler(handler: BusWriteHandler) {
         self.busWriteHandlers[handler.address] = handler.callback
     }
-    
-/*
- */
-    
+
     /// Refresh the bus.
     public func refresh() {
     }

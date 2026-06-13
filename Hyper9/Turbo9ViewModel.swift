@@ -27,7 +27,12 @@ class Turbo9ViewModel: ObservableObject {
     public var updateCPU: (() -> Void) = {}
     public var output : UInt8 = 0
     @Published public var outputString = ""
+    private let maxOutputLength = 8000
     private var outputBuffer = ""
+    private let outputLock = NSLock()
+    private var inputQueue: [UInt8] = []
+    private let inputLock = NSLock()
+    private var lastInputDeliveryCycle: UInt = 0
     @Published var running = false
     public var timerRunning = false
     public var instructionsPerSecond = 0.0
@@ -50,7 +55,10 @@ class Turbo9ViewModel: ObservableObject {
     func load(url: URL) {
         do {
             try turbo9.load(url: url)
+            outputLock.lock()
             outputBuffer = ""
+            outputLock.unlock()
+            outputString = ""
             updateUI()
         } catch {
 
@@ -60,7 +68,9 @@ class Turbo9ViewModel: ObservableObject {
     func reset() {
         do {
             try turbo9.reset()
-            outputBuffer = ""
+            outputLock.lock(); outputBuffer = ""; outputLock.unlock()
+            inputLock.lock(); inputQueue = []; inputLock.unlock()
+            outputString = ""
             instructionsPerSecond = 0.0
         } catch {
 
@@ -79,16 +89,18 @@ class Turbo9ViewModel: ObservableObject {
     }
 
     init() {
-        let outputHandler = BusWriteHandler(address: 0xFF00, callback: { value in
-            self.outputBuffer += String(format: "%c", value)
+        let outputHandler = BusWriteHandler(address: 0xFF00, callback: { [weak self] value in
+            guard let self else { return }
+            let char = String(format: "%c", value)
+            self.outputLock.lock()
+            self.outputBuffer += char
+            self.outputLock.unlock()
         })
 
-        let timerStatusHandler = BusWriteHandler(address: 0xFF02, callback: { value in
-            // Writing 1 to bit 0 deasserts IRQ
-            if (value & 0x01) == 0x01 {
-                let _ = self.turbo9.bus.read(0xFF02, readThroughIO: true) & 0xFE
-                self.turbo9.deassertIRQ()
-            }
+        let irqStatusHandler = BusWriteHandler(address: 0xFF02, callback: { [weak self] value in
+            guard let self else { return }
+            if (value & 0x01) == 0x01 { self.turbo9.deassertIRQ() }
+            if (value & 0x02) == 0x02 { self.turbo9.deassertIRQ() }
         })
 
         let timerControlHandler = BusWriteHandler(address: 0xFF03, callback: { value in
@@ -102,7 +114,7 @@ class Turbo9ViewModel: ObservableObject {
         reset()
 
         turbo9.bus.addWriteHandler(handler: outputHandler)
-        turbo9.bus.addWriteHandler(handler: timerStatusHandler)
+        turbo9.bus.addWriteHandler(handler: irqStatusHandler)
         turbo9.bus.addWriteHandler(handler: timerControlHandler)
 
         // Set the model's update callback to update the published property.
@@ -119,9 +131,16 @@ class Turbo9ViewModel: ObservableObject {
                     self.S = self.turbo9.S
                     self.ccString = self.turbo9.ccString
                     self.PC = self.turbo9.PC
-                    self.memoryDump = self.turbo9.memoryDump
-                    self.operations = self.turbo9.operations
-                    self.outputString = self.outputBuffer
+                    self.outputLock.lock()
+                    let newOutput = self.outputBuffer
+                    self.outputBuffer = ""
+                    self.outputLock.unlock()
+                    if !newOutput.isEmpty {
+                        self.outputString += newOutput
+                        if self.outputString.count > self.maxOutputLength {
+                            self.outputString = String(self.outputString.suffix(self.maxOutputLength))
+                        }
+                    }
                 }
             }
         }
@@ -155,6 +174,46 @@ class Turbo9ViewModel: ObservableObject {
         }
 
         turbo9.instructionClosure = log
+    }
+
+    func sendInputLine(_ line: String) {
+        for byte in line.utf8 { sendInputChar(byte) }
+        sendInputChar(0x0D)
+    }
+
+    func sendInputChar(_ char: UInt8) {
+        print("sendInputChar: 0x\(String(format: "%02X", char))")
+        inputLock.lock()
+        inputQueue.append(char)
+        inputLock.unlock()
+    }
+
+    func deliverNextInputIfReady() {
+        guard turbo9.clockCycles - lastInputDeliveryCycle >= 500 else { return }
+        inputLock.lock()
+        guard !inputQueue.isEmpty else { inputLock.unlock(); return }
+        let char = inputQueue.removeFirst()
+        inputLock.unlock()
+        lastInputDeliveryCycle = turbo9.clockCycles
+        print("deliverNextInputIfReady: 0x\(String(format: "%02X", char))")
+        turbo9.bus.write(0xFF01, data: char)
+        turbo9.bus.write(0xFF02, data: 0x02)
+        if (turbo9.bus.read(0xFF03) & 0x02) == 0x02 {
+            turbo9.assertIRQ()
+        }
+    }
+
+    func updateMemoryView() {
+        let pc = turbo9.PC
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let dump = self.turbo9.memoryWindow(around: pc)
+            let ops = self.turbo9.operations
+            DispatchQueue.main.async {
+                self.memoryDump = dump
+                self.operations = ops
+            }
+        }
     }
 
     func startTask() {

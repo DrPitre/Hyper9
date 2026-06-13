@@ -35,7 +35,6 @@ struct DocumentView: View {
                             TurbOSGlobalsView()
                         }
                     }
-                    //            .frame(width:140, height: .infinity)
                     .tabItem {
                         Label("System Globals", systemImage: "2.circle")
                     }
@@ -71,12 +70,12 @@ struct DocumentView: View {
             .task {
                 let _ = model.disassemble(instructionCount: 2)
                 model.updateUI()
+                model.updateMemoryView()
             }
         }
         .onAppear() {
         }
-        .onReceive(model.$PC) { newValue in
-//            model.turbo9.checkDisassembly()
+        .onReceive(model.$PC) { _ in
         }
     }
 }

@@ -27,6 +27,7 @@ struct ControlView: View {
                 model.instructionsPerSecond = Double(stepCount) / Date().timeIntervalSince(startTime)
                 model.turbo9.checkDisassembly()
                 model.updateUI()
+                model.updateMemoryView()
             }
         }
         let runClosure : () -> Void = {
@@ -38,26 +39,30 @@ struct ControlView: View {
                 model.running = true
                 goLabel = "pause.fill"
                 model.updateCPU()
-                DispatchQueue.global(qos: .background).async {
+                DispatchQueue.global(qos: .userInitiated).async {
                     let startTime = Date()
                     var instructionCount = 0
                     var breakpoint = false
+                    var pendingUIUpdate = false
+                    let parsedBreakpoints = breakpoints.compactMap { $0.asUInt16FromHex }
                     repeat {
                         if breakpoint == false {
                             model.step()
                             instructionCount += 1
+                            model.deliverNextInputIfReady()
                             if model.timerRunning == true && model.turbo9.clockCycles % cyclesPerTick == 0 {
                                 model.invokeTimer()
                             }
-                            if model.timerRunning == true && model.turbo9.clockCycles % (cyclesPerTick * 50) == 0 {
-                                DispatchQueue.main.sync {
-                                    //                                            model.turbo9.checkDisassembly()
-                                    //                                            model.updateUI()
+                            if instructionCount % 50_000 == 0 && !pendingUIUpdate {
+                                pendingUIUpdate = true
+                                DispatchQueue.main.async {
+                                    model.updateUI()
+                                    pendingUIUpdate = false
                                 }
                             }
                         }
-                        for b in breakpoints {
-                            if b.asUInt16FromHex == model.turbo9.PC {
+                        for b in parsedBreakpoints {
+                            if b == model.turbo9.PC {
                                 breakpoint = true
                                 break
                             }
@@ -69,6 +74,7 @@ struct ControlView: View {
                         goLabel = "play.fill"
                         model.turbo9.checkDisassembly()
                         model.updateUI()
+                        model.updateMemoryView()
                     }
                 }
             }
@@ -171,10 +177,10 @@ struct ControlView: View {
                         
                         openPanel.begin { (result) in
                             if result == .OK, let url = openPanel.url {
-                                // Use the selected file URL
                                 model.load(url: url)
                                 model.turbo9.checkDisassembly()
                                 model.updateUI()
+                                model.updateMemoryView()
                             } else {
                                 // User canceled the selection
                             }
