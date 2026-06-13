@@ -35,7 +35,6 @@ private class KeyCaptureNSView: NSView {
         guard let chars = event.characters else { return }
         for byte in chars.utf8 {
             let out = byte == 0x0A ? UInt8(0x0D) : byte
-            print("keyDown: 0x\(String(format: "%02X", out))")
             onKey(out)
         }
     }

@@ -182,7 +182,6 @@ class Turbo9ViewModel: ObservableObject {
     }
 
     func sendInputChar(_ char: UInt8) {
-        print("sendInputChar: 0x\(String(format: "%02X", char))")
         inputLock.lock()
         inputQueue.append(char)
         inputLock.unlock()
@@ -195,7 +194,6 @@ class Turbo9ViewModel: ObservableObject {
         let char = inputQueue.removeFirst()
         inputLock.unlock()
         lastInputDeliveryCycle = turbo9.clockCycles
-        print("deliverNextInputIfReady: 0x\(String(format: "%02X", char))")
         turbo9.bus.write(0xFF01, data: char)
         turbo9.bus.write(0xFF02, data: 0x02)
         if (turbo9.bus.read(0xFF03) & 0x02) == 0x02 {
