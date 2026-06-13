@@ -12,7 +12,6 @@ struct ControlView: View {
     @EnvironmentObject var model: Turbo9ViewModel
     @State var stepCount : UInt16 = 1
     @State var goLabel = "play.fill"
-    @Binding var breakpoints: [String]
 
     var body: some View {
         let cyclesPerTick : UInt = 1000
@@ -44,7 +43,8 @@ struct ControlView: View {
                     var instructionCount = 0
                     var breakpoint = false
                     var pendingUIUpdate = false
-                    let parsedBreakpoints = breakpoints.compactMap { $0.asUInt16FromHex }
+                    var lastUIUpdateTime = startTime
+                    let uiUpdateInterval: TimeInterval = 0.05  // ~20 fps live status
                     repeat {
                         if breakpoint == false {
                             model.step()
@@ -53,19 +53,23 @@ struct ControlView: View {
                             if model.timerRunning == true && model.turbo9.clockCycles % cyclesPerTick == 0 {
                                 model.invokeTimer()
                             }
-                            if instructionCount % 50_000 == 0 && !pendingUIUpdate {
-                                pendingUIUpdate = true
-                                DispatchQueue.main.async {
-                                    model.updateUI()
-                                    pendingUIUpdate = false
+                            if instructionCount % 1_000 == 0 && !pendingUIUpdate {
+                                let now = Date()
+                                if now.timeIntervalSince(lastUIUpdateTime) >= uiUpdateInterval {
+                                    lastUIUpdateTime = now
+                                    pendingUIUpdate = true
+                                    let elapsed = now.timeIntervalSince(startTime)
+                                    let ips = elapsed > 0 ? Double(instructionCount) / elapsed : 0
+                                    DispatchQueue.main.async {
+                                        model.instructionsPerSecond = ips
+                                        model.updateUI()
+                                        pendingUIUpdate = false
+                                    }
                                 }
                             }
                         }
-                        for b in parsedBreakpoints {
-                            if b == model.turbo9.PC {
-                                breakpoint = true
-                                break
-                            }
+                        if model.isBreakpoint(model.turbo9.PC) {
+                            breakpoint = true
                         }
                     } while model.running == true && breakpoint == false
                     DispatchQueue.main.async {
@@ -90,7 +94,8 @@ struct ControlView: View {
                     }) {
                         Image(systemName: "i.circle")
                     }
-                    
+                    .help("Assert IRQ (maskable interrupt)")
+
                     Button(action: {
                         model.running = false
                         model.turbo9.assertFIRQ()
@@ -99,7 +104,8 @@ struct ControlView: View {
                     }) {
                         Image(systemName: "f.circle")
                     }
-                    
+                    .help("Assert FIRQ (fast interrupt)")
+
                     Button(action: {
                         model.running = false
                         model.turbo9.assertNMI()
@@ -108,7 +114,8 @@ struct ControlView: View {
                     }) {
                         Image(systemName: "n.circle")
                     }
-                    
+                    .help("Assert NMI (non-maskable interrupt)")
+
                     Button(action: {
                         model.running = false
                         model.invokeTimer()
@@ -117,6 +124,7 @@ struct ControlView: View {
                     }) {
                         Image(systemName: "timer")
                     }
+                    .help("Invoke timer tick")
                 }
             } label: {
                 Label("Interrupts", systemImage: "stop.fill")
@@ -124,16 +132,16 @@ struct ControlView: View {
 
             GroupBox {
                 HStack {
-                    Button(action: runClosure
-                    ) {
+                    Button(action: runClosure) {
                         Image(systemName: goLabel)
                     }
+                    .help(model.running ? "Pause execution (⌘R)" : "Run until breakpoint (⌘R)")
+                    .keyboardShortcut("r", modifiers: .command)
 
                     Button(action: {
                         if let operation = model.turbo9.disassemble() {
                             if operation.isBranchSubroutineType() == true
                             {
-//                                gotoAddress = model.turbo9.PC &+ UInt16(operation.size)
                                 runClosure()
                             } else {
                                 stepClosure()
@@ -142,23 +150,18 @@ struct ControlView: View {
                     }) {
                         Image(systemName: "arrow.right")
                     }
+                    .help("Step Over — execute current instruction, running through any subroutine call (⌘')")
+                    .keyboardShortcut("'", modifiers: .command)
                     .disabled(model.running == true)
-                    
+
                     Button(action: {
                         stepClosure()
                     }) {
                         Image(systemName: "arrow.down")
                     }
+                    .help("Step Into — execute one instruction (⌘;)")
+                    .keyboardShortcut(";", modifiers: .command)
                     .disabled(model.running == true)
-                    
-/*                    Button(action: {
-                    }) {
-                        Image(systemName: "arrow.up")
-                    }
-                    .disabled(model.running == true)
-
-                    DecTextField(number: $stepCount)
- */
                 }
             } label: {
                 Label("Execution", systemImage: "figure.step.training")
@@ -189,8 +192,9 @@ struct ControlView: View {
                     }) {
                         Image(systemName: "folder.badge.plus")
                     }
+                    .help("Load an image file (.img) and reset")
                     .disabled(model.running == true)
-                    
+
                     Button(action: {
                         model.reset()
                         model.turbo9.checkDisassembly()
@@ -198,28 +202,22 @@ struct ControlView: View {
                     }) {
                         Image(systemName: "button.horizontal.top.press")
                     }
+                    .help("Reset CPU")
                     .disabled(model.running == true)
+
                     Toggle("log", systemImage: "text.alignleft", isOn: $model.logging)
                         .toggleStyle(.checkbox)
+                        .help("Log each executed instruction to file")
                 }
             } label: {
                 Label("Control", systemImage: "gamecontroller.fill")
             }
-
-            /*
-             .onChange(of: model.PC) { newValue in
-             print("Text changed to: \(newValue)")
-             model.turbo9.PC = newValue
-             // Perform any additional actions when the text changes.
-             }
-             */
         }
     }
 }
 
 #Preview {
-    @Previewable @State var b : [String] = []
     let model = Turbo9ViewModel()
-    ControlView(breakpoints: $b)
+    ControlView()
         .environmentObject(model)
 }

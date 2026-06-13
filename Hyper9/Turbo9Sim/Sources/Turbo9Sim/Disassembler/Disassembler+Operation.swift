@@ -79,6 +79,19 @@ extension Disassembler {
             let paddedString = instructionBytes().padding(toLength: 8, withPad: " ", startingAt: 0)
             return [String(format: "%04X  %@  ", offset, paddedString), label.padding(toLength: 24, withPad: " ", startingAt: 0), instruction.rawValue.padding(toLength: 6, withPad: " ", startingAt: 0), operandAsString].compactMap { $0 }.joined(separator: " ")
         }
+
+        // MARK: - Column accessors (for the UI)
+
+        /// "C100" — 4-digit hex offset, no `$` prefix.
+        public var addressText: String { String(format: "%04X", offset) }
+        /// Raw instruction bytes as concatenated hex, e.g. "10A60003".
+        public var bytesText: String { instructionBytes() }
+        /// Symbol-table label for this address, or empty if none.
+        public var labelText: String { label }
+        /// Mnemonic e.g. "LDA".
+        public var mnemonicText: String { instruction.rawValue }
+        /// Formatted operand string, or empty if the instruction is inherent.
+        public var operandText: String { operandAsString ?? "" }
         
         private func instructionBytes() -> String {
             var result = ""

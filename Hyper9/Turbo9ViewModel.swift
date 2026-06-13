@@ -18,9 +18,22 @@ class Turbo9ViewModel: ObservableObject {
     @Published var U: UInt16 = 0x0000
     @Published var S: UInt16 = 0x0000
     @Published var PC: UInt16 = 0x0000
+    @Published var CC: UInt8 = 0x00
     @Published var ccString: String = ""
+    // Previous values, captured at the start of each updateUI(), for highlighting
+    // what changed since the last step. Highlights are gated by `!running`.
+    @Published var previousA: UInt8 = 0x00
+    @Published var previousB: UInt8 = 0x00
+    @Published var previousDP: UInt8 = 0x00
+    @Published var previousCC: UInt8 = 0x00
+    @Published var previousX: UInt16 = 0x0000
+    @Published var previousY: UInt16 = 0x0000
+    @Published var previousU: UInt16 = 0x0000
+    @Published var previousS: UInt16 = 0x0000
+    @Published var previousPC: UInt16 = 0x0000
     @Published var operations: [Disassembler.Turbo9Operation] = []
     @Published var memorySnapshot: [UInt8] = []
+    @Published var previousMemorySnapshot: [UInt8] = []
     @Published var logging : Bool = false
     public var turbo9 = Disassembler(program: [UInt8].init(repeating: 0x00, count: 65536))
     public var output : UInt8 = 0
@@ -37,9 +50,38 @@ class Turbo9ViewModel: ObservableObject {
     private let fileLogger: DDFileLogger = DDFileLogger() // File Logger
     private var logBuffer : String = ""
 
+    private let breakpointsLock = NSLock()
+    private var breakpointAddresses: Set<UInt16> = []
+
+    func setBreakpoints(_ addresses: [UInt16]) {
+        breakpointsLock.lock()
+        breakpointAddresses = Set(addresses)
+        breakpointsLock.unlock()
+    }
+
+    func isBreakpoint(_ address: UInt16) -> Bool {
+        breakpointsLock.lock()
+        let hit = breakpointAddresses.contains(address)
+        breakpointsLock.unlock()
+        return hit
+    }
+
     func disassemble(instructionCount: UInt) {
         let _ = turbo9.disassemble(instructionCount: instructionCount)
         updateUI()
+    }
+
+    func ensureDisassembly(lineCount: Int) {
+        let current = turbo9.operations.count
+        guard current < lineCount else { return }
+        let extraCount = UInt(lineCount - current)
+        let savedPC = turbo9.PC
+        if let last = turbo9.operations.last {
+            turbo9.PC = last.offset &+ UInt16(last.size)
+        }
+        let _ = turbo9.disassemble(instructionCount: extraCount)
+        turbo9.PC = savedPC
+        operations = turbo9.operations
     }
 
     func step() {
@@ -61,6 +103,45 @@ class Turbo9ViewModel: ObservableObject {
         } catch {
 
         }
+    }
+
+    /// Restore a full 64 KB memory snapshot (e.g. when opening a document).
+    func loadMemorySnapshot(_ data: Data) {
+        turbo9.loadMemorySnapshot(data)
+        outputLock.lock(); outputBuffer = ""; outputLock.unlock()
+        inputLock.lock(); inputQueue = []; inputLock.unlock()
+        lastInputDeliveryCycle = 0
+        outputString = ""
+        instructionsPerSecond = 0.0
+        turbo9.checkDisassembly()
+        updateUI()
+        updateMemoryView()
+    }
+
+    /// Snapshot the entire memory (for saving as a document).
+    func memorySnapshotData() -> Data {
+        turbo9.memorySnapshotData()
+    }
+
+    /// Restore a versioned document snapshot — both CPU registers and memory.
+    /// Falls back to a raw memory image (with CPU reset) if the file is legacy / unrecognized.
+    func loadDocumentSnapshot(_ data: Data) {
+        turbo9.loadDocumentSnapshot(data)
+        outputLock.lock(); outputBuffer = ""; outputLock.unlock()
+        inputLock.lock(); inputQueue = []; inputLock.unlock()
+        lastInputDeliveryCycle = 0
+        outputString = ""
+        instructionsPerSecond = 0.0
+        turbo9.checkDisassembly()
+        updateUI()
+        updateMemoryView()
+    }
+
+    /// Snapshot the CPU registers + memory for saving as a document.
+    func documentSnapshotData() -> Data {
+        // Make sure any pending edits in the register text fields land in the CPU first.
+        updateCPU()
+        return turbo9.documentSnapshotData()
     }
 
     func reset() {
@@ -134,6 +215,17 @@ class Turbo9ViewModel: ObservableObject {
     func updateUI() {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            // Snapshot current values as "previous" so the UI can highlight what changed.
+            self.previousA = self.A
+            self.previousB = self.B
+            self.previousDP = self.DP
+            self.previousCC = self.CC
+            self.previousX = self.X
+            self.previousY = self.Y
+            self.previousU = self.U
+            self.previousS = self.S
+            self.previousPC = self.PC
+
             self.A = self.turbo9.A
             self.B = self.turbo9.B
             self.DP = self.turbo9.DP
@@ -141,6 +233,7 @@ class Turbo9ViewModel: ObservableObject {
             self.Y = self.turbo9.Y
             self.U = self.turbo9.U
             self.S = self.turbo9.S
+            self.CC = self.turbo9.CC
             self.ccString = self.turbo9.ccString
             self.PC = self.turbo9.PC
             self.outputLock.lock()
@@ -164,6 +257,7 @@ class Turbo9ViewModel: ObservableObject {
         turbo9.Y = Y
         turbo9.U = U
         turbo9.S = S
+        turbo9.CC = CC
         turbo9.ccString = ccString
         turbo9.PC = PC
         turbo9.logging = logging
@@ -178,6 +272,14 @@ class Turbo9ViewModel: ObservableObject {
         inputLock.lock()
         inputQueue.append(char)
         inputLock.unlock()
+    }
+
+    /// Empty the terminal output buffer and the on-screen string.
+    func clearOutput() {
+        outputLock.lock()
+        outputBuffer = ""
+        outputLock.unlock()
+        outputString = ""
     }
 
     func deliverNextInputIfReady() {
@@ -195,6 +297,7 @@ class Turbo9ViewModel: ObservableObject {
     }
 
     func updateMemoryView() {
+        previousMemorySnapshot = memorySnapshot
         memorySnapshot = turbo9.memoryBytes
         operations = turbo9.operations
     }

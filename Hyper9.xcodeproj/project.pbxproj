@@ -60,11 +60,6 @@
 			path = Hyper9;
 			sourceTree = "<group>";
 		};
-		6888AC072D413EA2004DC040 /* Hyper9Tests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Hyper9Tests;
-			sourceTree = "<group>";
-		};
 		6888AC112D413EA2004DC040 /* Hyper9UITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Hyper9UITests;
@@ -121,7 +116,6 @@
 				68440D692DA2C88800890262 /* Hyper9.xctestplan */,
 				684F6DC92D60CB3200EF4315 /* Turbo9.pxd */,
 				6888ABF52D413E9F004DC040 /* Hyper9 */,
-				6888AC072D413EA2004DC040 /* Hyper9Tests */,
 				6888AC112D413EA2004DC040 /* Hyper9UITests */,
 				68BF43AC2D7DB50C00F3B3A8 /* hyper9-cmd */,
 				68BF43B22D7DB52500F3B3A8 /* Frameworks */,
@@ -188,9 +182,6 @@
 			);
 			dependencies = (
 				6888AC062D413EA2004DC040 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				6888AC072D413EA2004DC040 /* Hyper9Tests */,
 			);
 			name = Hyper9Tests;
 			packageProductDependencies = (

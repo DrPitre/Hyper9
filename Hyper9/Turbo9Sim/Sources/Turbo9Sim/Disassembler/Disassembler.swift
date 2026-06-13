@@ -29,6 +29,7 @@ private class Symbol {
     }
 }
 
+@dynamicMemberLookup
 public class Disassembler {
 
     private typealias OpCode = Turbo9CPU.OpCode
@@ -36,6 +37,17 @@ public class Disassembler {
     // MARK: - Composed CPU
 
     public var cpu: Turbo9CPU
+
+    // MARK: - Dynamic forwarding to cpu for any Turbo9CPU member
+
+    public subscript<T>(dynamicMember keyPath: WritableKeyPath<Turbo9CPU, T>) -> T {
+        get { cpu[keyPath: keyPath] }
+        set { cpu[keyPath: keyPath] = newValue }
+    }
+
+    public subscript<T>(dynamicMember keyPath: KeyPath<Turbo9CPU, T>) -> T {
+        cpu[keyPath: keyPath]
+    }
 
     // MARK: - Disassembler-specific properties
 
@@ -146,6 +158,115 @@ public class Disassembler {
         } catch {
             fatalError("Could not read file \(url)")
         }
+    }
+
+    /// Replace the entire 64 KB memory with the supplied bytes.
+    /// Shorter data is zero-padded; longer data is truncated.
+    /// The CPU is reset so PC is fetched from the reset vector of the new memory.
+    public func loadMemorySnapshot(_ data: Data) {
+        var bytes = [UInt8](data)
+        if bytes.count < 0x10000 {
+            bytes.append(contentsOf: [UInt8](repeating: 0, count: 0x10000 - bytes.count))
+        } else if bytes.count > 0x10000 {
+            bytes = Array(bytes.prefix(0x10000))
+        }
+        cpu.bus.memory = bytes
+        cpu.bus.originalRam = bytes
+        operations = []
+        try? cpu.reset()
+    }
+
+    /// Returns the entire 64 KB memory as Data, suitable for persisting in a document.
+    public func memorySnapshotData() -> Data {
+        Data(cpu.bus.memory)
+    }
+
+    /// Returns the symbol-table label for the given address, or an empty string if none.
+    public func symbol(for address: UInt16) -> String {
+        symbolTable.lookup(address: address)
+    }
+
+    // MARK: - Document snapshot (memory + CPU registers)
+
+    // Format v1:
+    //   bytes  0..3   magic "HYP9"
+    //   byte   4      version (1)
+    //   bytes  5..7   reserved (zero)
+    //   bytes  8..21  CPU registers: A, B, DP, CC, X, Y, U, S, PC
+    //                 (UInt16 values are big-endian)
+    //   bytes 22..    64 KB of memory
+    private static let snapshotMagic: [UInt8] = [0x48, 0x59, 0x50, 0x39] // "HYP9"
+    private static let snapshotVersion: UInt8 = 1
+    private static let snapshotHeaderSize = 8
+    private static let snapshotRegSize = 14
+    private static let snapshotMemoryOffset = snapshotHeaderSize + snapshotRegSize
+
+    /// Returns a versioned binary blob with the CPU registers and full memory.
+    public func documentSnapshotData() -> Data {
+        var data = Data()
+        data.reserveCapacity(Disassembler.snapshotMemoryOffset + 0x10000)
+        data.append(contentsOf: Disassembler.snapshotMagic)
+        data.append(Disassembler.snapshotVersion)
+        data.append(contentsOf: [0x00, 0x00, 0x00])
+        data.append(cpu.A)
+        data.append(cpu.B)
+        data.append(cpu.DP)
+        data.append(cpu.CC)
+        func appendBE(_ v: UInt16) {
+            data.append(UInt8((v >> 8) & 0xFF))
+            data.append(UInt8(v & 0xFF))
+        }
+        appendBE(cpu.X)
+        appendBE(cpu.Y)
+        appendBE(cpu.U)
+        appendBE(cpu.S)
+        appendBE(cpu.PC)
+        data.append(contentsOf: cpu.bus.memory)
+        return data
+    }
+
+    /// Restore a document snapshot. Accepts either the versioned format above
+    /// or a legacy raw 64 KB memory dump (in which case the CPU is reset).
+    public func loadDocumentSnapshot(_ data: Data) {
+        let bytes = [UInt8](data)
+        let header = Disassembler.snapshotMagic
+        let isVersioned = bytes.count >= Disassembler.snapshotMemoryOffset
+            && bytes[0] == header[0]
+            && bytes[1] == header[1]
+            && bytes[2] == header[2]
+            && bytes[3] == header[3]
+        guard isVersioned, bytes[4] == Disassembler.snapshotVersion else {
+            // Legacy / unknown — just treat as a memory image and reset.
+            loadMemorySnapshot(data)
+            return
+        }
+
+        // Memory
+        let memOffset = Disassembler.snapshotMemoryOffset
+        var mem = Array(bytes.dropFirst(memOffset))
+        if mem.count < 0x10000 {
+            mem.append(contentsOf: [UInt8](repeating: 0, count: 0x10000 - mem.count))
+        } else if mem.count > 0x10000 {
+            mem = Array(mem.prefix(0x10000))
+        }
+        cpu.bus.memory = mem
+        cpu.bus.originalRam = mem
+        operations = []
+
+        // Registers
+        let r = Disassembler.snapshotHeaderSize
+        cpu.A  = bytes[r]
+        cpu.B  = bytes[r + 1]
+        cpu.DP = bytes[r + 2]
+        cpu.CC = bytes[r + 3]
+        func readBE(_ off: Int) -> UInt16 {
+            (UInt16(bytes[r + off]) << 8) | UInt16(bytes[r + off + 1])
+        }
+        cpu.X  = readBE(4)
+        cpu.Y  = readBE(6)
+        cpu.U  = readBE(8)
+        cpu.S  = readBE(10)
+        cpu.PC = readBE(12)
     }
 
     public init(from url: URL, pc: UInt16 = 0x00) {

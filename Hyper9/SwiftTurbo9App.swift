@@ -16,6 +16,7 @@ struct Hyper9App: App {
             DocumentView(document: file.$document)
                 .environmentObject(file.document.disassembler)
         }
+        .defaultSize(width: 1400, height: 900)
     }
     
     func openAuxiliaryWindow(disassembler: Turbo9ViewModel) {

@@ -3,29 +3,37 @@ import UniformTypeIdentifiers
 
 // Define your document type.
 struct SimDocument: FileDocument {
-    // The document’s content; adjust as needed.
+    // Document holds its own simulator instance; the loaded memory is the document data.
     var disassembler = Turbo9ViewModel()
-    var text: String = "Hello, SwiftUI Document App!"
 
-    // Specify the content types that your document supports.
-    static var readableContentTypes: [UTType] { [.plainText] }
-
-    // A default initializer for new documents.
-    init() {}
-
-    // Initialize from a file configuration.
-    init(configuration: ReadConfiguration) throws {
-        if let data = configuration.file.regularFileContents,
-           let fileContents = String(data: data, encoding: .utf8) {
-            text = fileContents
-        } else {
-            throw CocoaError(.fileReadCorruptFile)
+    // Use the project's exported UTI (declared in Info.plist) plus generic data as a
+    // fallback so any binary file can be opened as a memory image.
+    static var readableContentTypes: [UTType] {
+        var types: [UTType] = [.data]
+        if let custom = UTType("org.pitre.Hyper9.document") {
+            types.insert(custom, at: 0)
         }
+        return types
     }
 
-    // Write the document's data into a FileWrapper.
+    static var writableContentTypes: [UTType] {
+        if let custom = UTType("org.pitre.Hyper9.document") {
+            return [custom]
+        }
+        return [.data]
+    }
+
+    init() {}
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        disassembler.loadDocumentSnapshot(data)
+    }
+
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        let data = text.data(using: .utf8)!
+        let data = disassembler.documentSnapshotData()
         return FileWrapper(regularFileWithContents: data)
     }
 }
