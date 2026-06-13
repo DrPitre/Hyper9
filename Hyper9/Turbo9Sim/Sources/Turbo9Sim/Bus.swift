@@ -41,8 +41,8 @@ public struct BusWriteHandler {
 /// Memory mapped I/O begins at $FF00 and ends at $FFEF. To respond to reads from this area, register a `BusReadhandler`
 /// Likewise, to respond to writes to this area, register a `BusWriteHandler`.
 public class Bus {
-    var busReadHandlers : [BusReadHandler] = []
-    var busWriteHandlers : [BusWriteHandler] = []
+    var busReadHandlers: [UInt16: () -> UInt8] = [:]
+    var busWriteHandlers: [UInt16: (UInt8) -> Void] = [:]
     weak var cpu: Turbo9CPU?
 //    var clockInterrupt : Timer? = nil
     var memory: [UInt8]
@@ -63,18 +63,18 @@ public class Bus {
     ///
     /// Parameters:
     /// - handler: An object that contains the read address and callback.
-    public func addReadHandler(handler : BusReadHandler) {
-        self.busReadHandlers.append(handler)
+    public func addReadHandler(handler: BusReadHandler) {
+        self.busReadHandlers[handler.address] = handler.callback
     }
-    
+
     /// Add a write handler.
     ///
     /// Create a write handler to receive a notification when there is a write to a particular address.
     ///
     /// Parameters:
     /// - handler: An object that contains the write address and callback.
-    public func addWriteHandler(handler : BusWriteHandler) {
-        self.busWriteHandlers.append(handler)
+    public func addWriteHandler(handler: BusWriteHandler) {
+        self.busWriteHandlers[handler.address] = handler.callback
     }
     
 /*
@@ -115,21 +115,13 @@ public class Bus {
     
     func mappedIOWriteHandler(_ address: UInt16, data: UInt8) {
         memory[Int(address)] = data
-        for handler in busWriteHandlers {
-            if address == handler.address {
-                handler.callback(data)
-                return
-            }
-        }
+        busWriteHandlers[address]?(data)
     }
 
     func mappedIOReadHandler(_ address: UInt16) -> UInt8 {
-        for handler in busReadHandlers {
-            if address == handler.address {
-                return handler.callback()
-            }
+        if let handler = busReadHandlers[address] {
+            return handler()
         }
-        
         return memory[Int(address)]
     }
 }
