@@ -76,14 +76,10 @@ struct TerminalView: View {
     private var minTerminalWidth: CGFloat { CGFloat(80) * charWidth }
 
     var body: some View {
-        GroupBox {
-            VStack(spacing: 0) {
-                toolbar
-                Divider()
-                terminalArea
-            }
-        } label: {
-            Label("Terminal", systemImage: "apple.terminal")
+        VStack(spacing: 0) {
+            toolbar
+            Divider()
+            terminalArea
         }
         .onAppear { focused = true }
     }

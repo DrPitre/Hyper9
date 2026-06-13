@@ -66,6 +66,20 @@ struct MemoryView: View {
 
     @State private var followPC: Bool = true
     @State private var gotoInput: String = ""
+    @State private var fontSize: CGFloat = 11
+
+    private static let displayCharCount: CGFloat = 77
+    private static let minFontSize: CGFloat = 9
+    private static let maxFontSize: CGFloat = 22
+    private static let monoCharRatio: CGFloat = 0.62
+    private static let horizontalChrome: CGFloat = 8
+
+    private func adjustedFontSize(for width: CGFloat) -> CGFloat {
+        guard width > 0 else { return fontSize }
+        let usable = max(0, width - Self.horizontalChrome)
+        let raw = usable / (Self.displayCharCount * Self.monoCharRatio)
+        return min(Self.maxFontSize, max(Self.minFontSize, raw))
+    }
 
     var body: some View {
         GroupBox {
@@ -87,6 +101,15 @@ struct MemoryView: View {
         } label: {
             Label("Memory", systemImage: "memorychip")
         }
+        .background(
+            GeometryReader { geo in
+                Color.clear
+                    .onAppear { fontSize = adjustedFontSize(for: geo.size.width) }
+                    .onChange(of: geo.size.width) { newWidth in
+                        fontSize = adjustedFontSize(for: newWidth)
+                    }
+            }
+        )
     }
 
     // MARK: - Subviews
@@ -139,7 +162,7 @@ struct MemoryView: View {
 
     private var columnHeader: some View {
         Text("Addr   0  1  2  3  4  5  6  7   8  9  A  B  C  D  E  F  0123456789ABCDEF")
-            .font(.system(size: 11, design: .monospaced))
+            .font(.system(size: fontSize, design: .monospaced))
             .foregroundColor(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 4)
@@ -163,7 +186,7 @@ struct MemoryView: View {
                 }
             }
         }
-        .font(.system(size: 11, design: .monospaced))
+        .font(.system(size: fontSize, design: .monospaced))
     }
 
     // MARK: - Helpers

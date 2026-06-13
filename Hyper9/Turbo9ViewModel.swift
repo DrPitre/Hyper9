@@ -20,6 +20,9 @@ class Turbo9ViewModel: ObservableObject {
     @Published var PC: UInt16 = 0x0000
     @Published var CC: UInt8 = 0x00
     @Published var ccString: String = ""
+    /// Set by other views (e.g. Module Directory, Processes) to ask MemoryView
+    /// to scroll to a specific address. MemoryView consumes and resets it.
+    @Published var memoryGotoTarget: UInt16? = nil
     // Previous values, captured at the start of each updateUI(), for highlighting
     // what changed since the last step. Highlights are gated by `!running`.
     @Published var previousA: UInt8 = 0x00

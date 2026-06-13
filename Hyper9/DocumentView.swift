@@ -14,6 +14,30 @@ struct DocumentView: View {
     @Binding var document: SimDocument
     @EnvironmentObject var model: Turbo9ViewModel
     @State private var breakpoints: [Breakpoint] = []
+    @State private var selectedTab: LeftTab = .breakpoints
+
+    private enum LeftTab: String, CaseIterable, Identifiable {
+        case breakpoints, terminal, globals, modules, processes
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .breakpoints: return "Breakpoints"
+            case .terminal:    return "Terminal"
+            case .globals:     return "System Globals"
+            case .modules:     return "Module Directory"
+            case .processes:   return "Processes"
+            }
+        }
+        var icon: String {
+            switch self {
+            case .breakpoints: return "stop.circle"
+            case .terminal:    return "apple.terminal"
+            case .globals:     return "globe"
+            case .modules:     return "folder"
+            case .processes:   return "cpu"
+            }
+        }
+    }
 
     var body: some View {
         PersistentHSplitView(
@@ -32,28 +56,71 @@ struct DocumentView: View {
     // MARK: - Panes
 
     private var leftPane: some View {
-        VStack {
+        VStack(spacing: 6) {
             MemoryView()
-            TabView {
-                BreakpointView(breakpoints: $breakpoints)
-                    .tabItem { Label("Breakpoints", systemImage: "stop.circle") }
-                    .padding()
-                TerminalView()
-                    .tabItem { Label("Terminal", systemImage: "apple.terminal") }
-
-                ScrollViewReader { _ in
-                    ScrollView { TurbOSGlobalsView() }
-                }
-                .tabItem { Label("System Globals", systemImage: "globe") }
-
-                ModuleDirectoryView()
-                    .tabItem { Label("Module Directory", systemImage: "folder") }
-                ProcessView()
-                    .tabItem { Label("Processes", systemImage: "cpu") }
+            VStack(spacing: 0) {
+                tabBar
+                Divider()
+                tabContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.secondary.opacity(0.25), lineWidth: 0.5)
+            )
+            .padding(.horizontal, 4)
+            .padding(.bottom, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 4) {
+            ForEach(LeftTab.allCases) { tab in
+                Button(action: { selectedTab = tab }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: tab.icon)
+                        Text(tab.title)
+                    }
+                    .font(.system(size: 12))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(selectedTab == tab ? Color(nsColor: .controlBackgroundColor) : Color.clear)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .strokeBorder(selectedTab == tab
+                                                  ? Color.secondary.opacity(0.35)
+                                                  : Color.clear,
+                                                  lineWidth: 0.5)
+                            )
+                    )
+                    .foregroundColor(selectedTab == tab ? .primary : .secondary)
+                }
+                .buttonStyle(.plain)
+                .help(tab.title)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var tabContent: some View {
+        switch selectedTab {
+        case .breakpoints:
+            BreakpointView(breakpoints: $breakpoints).padding()
+        case .terminal:
+            TerminalView()
+        case .globals:
+            TurbOSGlobalsView()
+        case .modules:
+            ModuleDirectoryView()
+        case .processes:
+            ProcessView()
+        }
     }
 
     private var rightPane: some View {
