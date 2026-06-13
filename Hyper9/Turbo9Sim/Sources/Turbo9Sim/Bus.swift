@@ -11,7 +11,7 @@ public struct BusReadHandler {
     ///
     /// Parameters:
     /// - address: The 16 bit address within the range of $FF00-$FFEF to respond to the read.
-    /// - callback: The closure ot call when a read occurs at the address. The closure returns an 8-bit value.
+    /// - callback: The closure to call when a read occurs at the address. The closure returns an 8-bit value.
     public init(address: UInt16, callback: @escaping () -> UInt8) {
         self.address = address
         self.callback = callback
@@ -20,7 +20,7 @@ public struct BusReadHandler {
 
 /// The mechanism that calls back when an area of memory is written to.
 ///
-/// Create a read handler when you want to respond to a write to an address in the memory mapped I/O area.
+/// Create a write handler when you want to respond to a write to an address in the memory mapped I/O area.
 public struct BusWriteHandler {
     var address : UInt16
     var callback: (_ value: UInt8) -> Void
@@ -29,7 +29,7 @@ public struct BusWriteHandler {
     ///
     /// Parameters:
     /// - address: The 16 bit address within the range of $FF00-$FFEF to respond to the write.
-    /// - callback: The closure ot call when a write occurs at the address. The closure receives the 8-bit value that was written.
+    /// - callback: The closure to call when a write occurs at the address. The closure receives the 8-bit value that was written.
     public init(address: UInt16, callback: @escaping (_: UInt8) -> Void) {
         self.address = address
         self.callback = callback
