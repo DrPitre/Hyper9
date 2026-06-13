@@ -20,7 +20,7 @@ class Turbo9ViewModel: ObservableObject {
     @Published var PC: UInt16 = 0x0000
     @Published var ccString: String = ""
     @Published var operations: [Disassembler.Turbo9Operation] = []
-    @Published var memoryDump: String = ""
+    @Published var memorySnapshot: [UInt8] = []
     @Published var logging : Bool = false
     public var turbo9 = Disassembler(program: [UInt8].init(repeating: 0x00, count: 65536))
     public var updateUI: (() -> Void) = {}
@@ -203,7 +203,7 @@ class Turbo9ViewModel: ObservableObject {
     }
 
     func updateMemoryView() {
-        memoryDump = turbo9.memoryWindow(around: turbo9.PC)
+        memorySnapshot = turbo9.memoryBytes
         operations = turbo9.operations
     }
 

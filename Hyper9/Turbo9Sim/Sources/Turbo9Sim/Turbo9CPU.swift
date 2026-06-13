@@ -92,6 +92,8 @@ public class Turbo9CPU {
         self.bus.ramDump(address: 0, numBytes: 0x10000)
     }
 
+    public var memoryBytes: [UInt8] { bus.memory }
+
     public func memoryWindow(around address: UInt16, size: Int = 512) -> String {
         let start = max(0, (Int(address) - size / 2) & ~0xF)
         let numBytes = min(size, 0x10000 - start)
