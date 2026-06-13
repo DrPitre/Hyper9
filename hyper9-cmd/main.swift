@@ -6,7 +6,11 @@
 //
 
 import Foundation
+#if canImport(Darwin)
 import Darwin
+#else
+import Glibc
+#endif
 import Turbo9Sim
 
 // MARK: - Terminal Mode Functions
