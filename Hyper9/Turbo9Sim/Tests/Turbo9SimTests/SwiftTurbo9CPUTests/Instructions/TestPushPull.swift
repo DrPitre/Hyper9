@@ -166,3 +166,73 @@ struct TestPSHSPULS {
 
 // TODO: Write test cases for PSHU/PULU
 
+struct TestPSHUPULU {
+    @Test func test_pshu_a() async throws {
+        let cpu = Turbo9CPU.create(ram: [0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        cpu.A = 0xF1
+        cpu.U = 0x10
+        cpu.setupAddressing(using: .imm8)
+
+        try cpu.perform(instruction: .pshu, addressMode: .imm8)
+
+        #expect(cpu.U == 0x0F)
+        #expect(cpu.readByte(cpu.U) == 0xF1)
+
+        cpu.PC = cpu.PC &- 1
+
+        cpu.A = 0x00
+        try cpu.perform(instruction: .pulu, addressMode: .imm8)
+
+        #expect(cpu.A == 0xF1)
+    }
+
+    @Test func test_pshu_b() async throws {
+        let cpu = Turbo9CPU.create(ram: [0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        cpu.B = 0x3C
+        cpu.U = 0x10
+        cpu.setupAddressing(using: .imm8)
+
+        try cpu.perform(instruction: .pshu, addressMode: .imm8)
+
+        #expect(cpu.U == 0x0F)
+        #expect(cpu.readByte(cpu.U) == 0x3C)
+
+        cpu.PC = cpu.PC &- 1
+
+        cpu.B = 0x00
+        try cpu.perform(instruction: .pulu, addressMode: .imm8)
+
+        #expect(cpu.B == 0x3C)
+    }
+
+    @Test func test_pshu_x() async throws {
+        let cpu = Turbo9CPU.create(ram: [0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        cpu.X = 0x4B5C
+        cpu.U = 0x10
+        cpu.setupAddressing(using: .imm8)
+
+        try cpu.perform(instruction: .pshu, addressMode: .imm8)
+
+        #expect(cpu.U == 0x0E)
+        #expect(cpu.readWord(cpu.U) == 0x4B5C)
+
+        cpu.PC = cpu.PC &- 1
+
+        cpu.X = 0x0000
+        try cpu.perform(instruction: .pulu, addressMode: .imm8)
+
+        #expect(cpu.X == 0x4B5C)
+    }
+
+    @Test func test_pshu_s() async throws {
+        let cpu = Turbo9CPU.create(ram: [0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], stackPointer: 0xABCD)
+        cpu.U = 0x10
+        cpu.setupAddressing(using: .imm8)
+
+        try cpu.perform(instruction: .pshu, addressMode: .imm8)
+
+        #expect(cpu.U == 0x0E)
+        #expect(cpu.readWord(cpu.U) == 0xABCD)
+    }
+}
+
