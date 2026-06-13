@@ -4,10 +4,20 @@ import Testing
 struct TestDisassembler {
     @Test func test_it_disassembles() {
         let disassembler = Disassembler(program: [0x20, 0x09, 0x00, 0x20, 0x0C, 0x00, 0x20, 0x12, 0x00, 0xA2, 0x00, 0x60, 0xE8, 0xE0, 0x05, 0xD0, 0xFB, 0x60, 0x00])
-        
-        let code = disassembler.disassemble()
+
+        let operation = disassembler.disassemble()
+
+        #expect(operation != nil)
+        #expect(operation?.opcode == 0x20)
+        #expect(operation?.instruction == .bra)
+        #expect(operation?.size == 2)
+        if case .relative8(let offset) = operation?.operand {
+            #expect(offset == 0x09)
+        } else {
+            Issue.record("Expected relative8 operand")
+        }
     }
-    
+
     @Test func test_dump() {
         let disassembler = Disassembler(program: [0x20, 0x09, 0x00, 0x20, 0x0C, 0x00, 0x20, 0x12, 0x00, 0xA2, 0x00, 0x60, 0xE8, 0xE0, 0x05, 0xD0, 0xFB, 0x60, 0x00])
         var s = disassembler.bus.ramDump(address: 0x00, numBytes: 1)
