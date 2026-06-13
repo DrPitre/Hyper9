@@ -14,198 +14,198 @@ struct TurbOSGlobalsView: View {
         GroupBox {
             HStack {
                 VStack {
-                    LabeledHex16TextField(label: "D.FMBM (Start):", number: $model.turbo9.D_FMBM_Start,
+                    LabeledHex16TextField(label: "D.FMBM (Start):", number: $model.turbo9.cpu.D_FMBM_Start,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    LabeledHex16TextField(label: "D.FMBM (End):", number: $model.turbo9.D_FMBM_End,
-                                          labelWidth: 80)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    LabeledHex16TextField(label: "D.MLIM:", number: $model.turbo9.D_MLIM,
+                    LabeledHex16TextField(label: "D.FMBM (End):", number: $model.turbo9.cpu.D_FMBM_End,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.ModDir (Start):", number: $model.turbo9.D_ModDir_Start,
+                    LabeledHex16TextField(label: "D.MLIM:", number: $model.turbo9.cpu.D_MLIM,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.ModDir (End):", number: $model.turbo9.D_ModDir_End,
+                    LabeledHex16TextField(label: "D.ModDir (Start):", number: $model.turbo9.cpu.D_ModDir_Start,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.Init:", number: $model.turbo9.D_Init,
+                    LabeledHex16TextField(label: "D.ModDir (End):", number: $model.turbo9.cpu.D_ModDir_End,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.SWI3:", number: $model.turbo9.D_SWI3,
+                    LabeledHex16TextField(label: "D.Init:", number: $model.turbo9.cpu.D_Init,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.SWI2:", number: $model.turbo9.D_SWI2,
+                    LabeledHex16TextField(label: "D.SWI3:", number: $model.turbo9.cpu.D_SWI3,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.FIRQ:", number: $model.turbo9.D_FIRQ,
+                    LabeledHex16TextField(label: "D.SWI2:", number: $model.turbo9.cpu.D_SWI2,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.IRQ:", number: $model.turbo9.D_IRQ,
+                    LabeledHex16TextField(label: "D.FIRQ:", number: $model.turbo9.cpu.D_FIRQ,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.SWI:", number: $model.turbo9.D_SWI,
+                    LabeledHex16TextField(label: "D.IRQ:", number: $model.turbo9.cpu.D_IRQ,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.NMI:", number: $model.turbo9.D_NMI,
+                    LabeledHex16TextField(label: "D.SWI:", number: $model.turbo9.cpu.D_SWI,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.NMI:", number: $model.turbo9.D_NMI,
+                    LabeledHex16TextField(label: "D.NMI:", number: $model.turbo9.cpu.D_NMI,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.SvcIRQ:", number: $model.turbo9.D_SvcIRQ,
+                    LabeledHex16TextField(label: "D.NMI:", number: $model.turbo9.cpu.D_NMI,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.Poll:", number: $model.turbo9.D_Poll,
+                    LabeledHex16TextField(label: "D.SvcIRQ:", number: $model.turbo9.cpu.D_SvcIRQ,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.UsrIRQ:", number: $model.turbo9.D_UsrIRQ,
+                    LabeledHex16TextField(label: "D.Poll:", number: $model.turbo9.cpu.D_Poll,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.UsrSvc:", number: $model.turbo9.D_UsrSvc,
+                    LabeledHex16TextField(label: "D.UsrIRQ:", number: $model.turbo9.cpu.D_UsrIRQ,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.SysSvc:", number: $model.turbo9.D_SysSvc,
+                    LabeledHex16TextField(label: "D.UsrSvc:", number: $model.turbo9.cpu.D_UsrSvc,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.UsrDis:", number: $model.turbo9.D_UsrDis,
+                    LabeledHex16TextField(label: "D.SysSvc:", number: $model.turbo9.cpu.D_SysSvc,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex8TextField(label: "D.Slice:", number: $model.turbo9.D_Slice,
+                    LabeledHex16TextField(label: "D.UsrDis:", number: $model.turbo9.cpu.D_UsrDis,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.SysDis:", number: $model.turbo9.D_SysDis,
+                    LabeledHex8TextField(label: "D.Slice:", number: $model.turbo9.cpu.D_Slice,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.PrcDBT:", number: $model.turbo9.D_PrcDBT,
+                    LabeledHex16TextField(label: "D.SysDis:", number: $model.turbo9.cpu.D_SysDis,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.Proc:", number: $model.turbo9.D_Proc,
+                    LabeledHex16TextField(label: "D.PrcDBT:", number: $model.turbo9.cpu.D_PrcDBT,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.AProcQ:", number: $model.turbo9.D_AProcQ,
+                    LabeledHex16TextField(label: "D.Proc:", number: $model.turbo9.cpu.D_Proc,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.WProcQ:", number: $model.turbo9.D_WProcQ,
+                    LabeledHex16TextField(label: "D.AProcQ:", number: $model.turbo9.cpu.D_AProcQ,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.SProcQ:", number: $model.turbo9.D_SProcQ,
+                    LabeledHex16TextField(label: "D.WProcQ:", number: $model.turbo9.cpu.D_WProcQ,
+                                          labelWidth: 80)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    LabeledHex16TextField(label: "D.SProcQ:", number: $model.turbo9.cpu.D_SProcQ,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex8TextField(label: "D.Year:", number: $model.turbo9.D_Year,
+                    LabeledHex8TextField(label: "D.Year:", number: $model.turbo9.cpu.D_Year,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex8TextField(label: "D.Month:", number: $model.turbo9.D_Month,
+                    LabeledHex8TextField(label: "D.Month:", number: $model.turbo9.cpu.D_Month,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex8TextField(label: "D.Day:", number: $model.turbo9.D_Day,
+                    LabeledHex8TextField(label: "D.Day:", number: $model.turbo9.cpu.D_Day,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex8TextField(label: "D.Hour:", number: $model.turbo9.D_Hour,
+                    LabeledHex8TextField(label: "D.Hour:", number: $model.turbo9.cpu.D_Hour,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex8TextField(label: "D.Min:", number: $model.turbo9.D_Min,
+                    LabeledHex8TextField(label: "D.Min:", number: $model.turbo9.cpu.D_Min,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex8TextField(label: "D.Sec:", number: $model.turbo9.D_Sec,
+                    LabeledHex8TextField(label: "D.Sec:", number: $model.turbo9.cpu.D_Sec,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex16TextField(label: "D.Ticks (High):", number: $model.turbo9.D_Ticks_High,
+                    LabeledHex16TextField(label: "D.Ticks (High):", number: $model.turbo9.cpu.D_Ticks_High,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.Ticks (Low):", number: $model.turbo9.D_Ticks_Low,
+                    LabeledHex16TextField(label: "D.Ticks (Low):", number: $model.turbo9.cpu.D_Ticks_Low,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex8TextField(label: "D.Tick:", number: $model.turbo9.D_Tick,
+                    LabeledHex8TextField(label: "D.Tick:", number: $model.turbo9.cpu.D_Tick,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex8TextField(label: "D.TSec:", number: $model.turbo9.D_TSec,
+                    LabeledHex8TextField(label: "D.TSec:", number: $model.turbo9.cpu.D_TSec,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex8TextField(label: "D.TSlice:", number: $model.turbo9.D_TSlice,
+                    LabeledHex8TextField(label: "D.TSlice:", number: $model.turbo9.cpu.D_TSlice,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.IOML:", number: $model.turbo9.D_IOML,
+                    LabeledHex16TextField(label: "D.IOML:", number: $model.turbo9.cpu.D_IOML,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.IOMH:", number: $model.turbo9.D_IOMH,
+                    LabeledHex16TextField(label: "D.IOMH:", number: $model.turbo9.cpu.D_IOMH,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.DevTbl:", number: $model.turbo9.D_DevTbl,
+                    LabeledHex16TextField(label: "D.DevTbl:", number: $model.turbo9.cpu.D_DevTbl,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.PolTbl:", number: $model.turbo9.D_PolTbl,
+                    LabeledHex16TextField(label: "D.PolTbl:", number: $model.turbo9.cpu.D_PolTbl,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.PthDBT:", number: $model.turbo9.D_PthDBT,
+                    LabeledHex16TextField(label: "D.PthDBT:", number: $model.turbo9.cpu.D_PthDBT,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.BTLO:", number: $model.turbo9.D_BTLO,
+                    LabeledHex16TextField(label: "D.BTLO:", number: $model.turbo9.cpu.D_BTLO,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.BTHI:", number: $model.turbo9.D_BTHI,
+                    LabeledHex16TextField(label: "D.BTHI:", number: $model.turbo9.cpu.D_BTHI,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.Clock:", number: $model.turbo9.D_Clock,
+                    LabeledHex16TextField(label: "D.Clock:", number: $model.turbo9.cpu.D_Clock,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex8TextField(label: "D.Boot:", number: $model.turbo9.D_Boot,
+                    LabeledHex8TextField(label: "D.Boot:", number: $model.turbo9.cpu.D_Boot,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    LabeledHex16TextField(label: "D.UrToSs:", number: $model.turbo9.D_UrToSs,
+                    LabeledHex16TextField(label: "D.UrToSs:", number: $model.turbo9.cpu.D_UrToSs,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex16TextField(label: "D.VIRQTable:", number: $model.turbo9.D_VIRQTable,
+                    LabeledHex16TextField(label: "D.VIRQTable:", number: $model.turbo9.cpu.D_VIRQTable,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    LabeledHex8TextField(label: "D.CRC:", number: $model.turbo9.D_CRC,
+                    LabeledHex8TextField(label: "D.CRC:", number: $model.turbo9.cpu.D_CRC,
                                           labelWidth: 80)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     
