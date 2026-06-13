@@ -23,8 +23,6 @@ class Turbo9ViewModel: ObservableObject {
     @Published var memorySnapshot: [UInt8] = []
     @Published var logging : Bool = false
     public var turbo9 = Disassembler(program: [UInt8].init(repeating: 0x00, count: 65536))
-    public var updateUI: (() -> Void) = {}
-    public var updateCPU: (() -> Void) = {}
     public var output : UInt8 = 0
     @Published public var outputString = ""
     private let maxOutputLength = 8000
@@ -118,50 +116,6 @@ class Turbo9ViewModel: ObservableObject {
         turbo9.bus.addWriteHandler(handler: irqStatusHandler)
         turbo9.bus.addWriteHandler(handler: timerControlHandler)
 
-        // Set the model's update callback to update the published property.
-        updateUI = { [weak self] in
-            // Make sure to update on the main thread.
-           DispatchQueue.main.async {
-                if let self = self {
-                    self.A = self.turbo9.A
-                    self.B = self.turbo9.B
-                    self.DP = self.turbo9.DP
-                    self.X = self.turbo9.X
-                    self.Y = self.turbo9.Y
-                    self.U = self.turbo9.U
-                    self.S = self.turbo9.S
-                    self.ccString = self.turbo9.ccString
-                    self.PC = self.turbo9.PC
-                    self.outputLock.lock()
-                    let newOutput = self.outputBuffer
-                    self.outputBuffer = ""
-                    self.outputLock.unlock()
-                    if !newOutput.isEmpty {
-                        self.outputString += newOutput
-                        if self.outputString.count > self.maxOutputLength {
-                            self.outputString = String(self.outputString.suffix(self.maxOutputLength))
-                        }
-                    }
-                }
-            }
-        }
-
-        updateCPU = { [weak self] in
-            // Make sure to update on the main thread.
-                if let self = self {
-                    self.turbo9.A = self.A
-                    self.turbo9.B = self.B
-                    self.turbo9.DP = self.DP
-                    self.turbo9.X = self.X
-                    self.turbo9.Y = self.Y
-                    self.turbo9.U = self.U
-                    self.turbo9.S = self.S
-                    self.turbo9.ccString = self.ccString
-                    self.turbo9.PC = self.PC
-                    self.turbo9.logging = self.logging
-            }
-        }
-
         fileLogger.rollingFrequency = 60 * 60 * 24 // 24 hours
         fileLogger.logFileManager.maximumNumberOfLogFiles = 20
         DDLog.add(fileLogger)
@@ -175,6 +129,44 @@ class Turbo9ViewModel: ObservableObject {
         }
 
         turbo9.instructionClosure = log
+    }
+
+    func updateUI() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.A = self.turbo9.A
+            self.B = self.turbo9.B
+            self.DP = self.turbo9.DP
+            self.X = self.turbo9.X
+            self.Y = self.turbo9.Y
+            self.U = self.turbo9.U
+            self.S = self.turbo9.S
+            self.ccString = self.turbo9.ccString
+            self.PC = self.turbo9.PC
+            self.outputLock.lock()
+            let newOutput = self.outputBuffer
+            self.outputBuffer = ""
+            self.outputLock.unlock()
+            if !newOutput.isEmpty {
+                self.outputString += newOutput
+                if self.outputString.count > self.maxOutputLength {
+                    self.outputString = String(self.outputString.suffix(self.maxOutputLength))
+                }
+            }
+        }
+    }
+
+    func updateCPU() {
+        turbo9.A = A
+        turbo9.B = B
+        turbo9.DP = DP
+        turbo9.X = X
+        turbo9.Y = Y
+        turbo9.U = U
+        turbo9.S = S
+        turbo9.ccString = ccString
+        turbo9.PC = PC
+        turbo9.logging = logging
     }
 
     func sendInputLine(_ line: String) {
