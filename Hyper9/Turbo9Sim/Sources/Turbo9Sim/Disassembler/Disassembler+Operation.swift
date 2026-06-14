@@ -92,6 +92,35 @@ extension Disassembler {
         public var mnemonicText: String { instruction.rawValue }
         /// Formatted operand string, or empty if the instruction is inherent.
         public var operandText: String { operandAsString ?? "" }
+
+        /// True for instructions whose operand is itself a code address.
+        public var isJumpOrBranch: Bool {
+            switch addressMode {
+            case .rel8, .rel16: return true
+            case .ext:          return instruction == .jmp || instruction == .jsr
+            default:            return false
+            }
+        }
+
+        /// Resolved absolute target address for branches / JMP / JSR.
+        public var branchTarget: UInt16? {
+            switch operand {
+            case .relative8(let raw):
+                var v = raw.asWord
+                if v & 0x80 == 0x80 { v = v ^ 0xFF00 }
+                return offset &+ 2 &+ v
+            case .relative16(let raw):
+                var v = raw
+                if v & 0x8000 == 0x8000 {
+                    v = UInt16(truncatingIfNeeded: Int16(bitPattern: v))
+                }
+                return offset &+ size &+ v
+            case .extended(let v):
+                return isJumpOrBranch ? v : nil
+            default:
+                return nil
+            }
+        }
         
         private func instructionBytes() -> String {
             var result = ""

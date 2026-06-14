@@ -43,9 +43,17 @@ struct DisassemblyView: View {
                                     let bpState = breakpointState(at: op.offset)
                                     InstructionRow(
                                         op: op,
+                                        targetSymbol: op.branchTarget.flatMap { addr -> String? in
+                                            let s = model.turbo9.symbol(for: addr)
+                                            return s.isEmpty ? nil : s
+                                        },
                                         isCurrent: isCurrent,
+                                        isZebra: index.isMultiple(of: 2),
                                         breakpoint: bpState,
-                                        fontSize: fontSize
+                                        fontSize: fontSize,
+                                        gotoOffset: { target in
+                                            scrollToTarget(target, proxy: proxy)
+                                        }
                                     )
                                     .id(op.offset)
                                     .contentShape(Rectangle())
@@ -108,6 +116,19 @@ struct DisassemblyView: View {
             breakpoints.append(Breakpoint(address: address))
         }
     }
+
+    /// Branch-target click handler. If the target is in the loaded operations
+    /// list, scroll the disassembly to it; otherwise fall back to jumping
+    /// the memory view there.
+    private func scrollToTarget(_ target: UInt16, proxy: ScrollViewProxy) {
+        if model.operations.contains(where: { $0.offset == target }) {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                proxy.scrollTo(target, anchor: .center)
+            }
+        } else {
+            model.memoryGotoTarget = target
+        }
+    }
 }
 
 private enum BreakpointState {
@@ -116,9 +137,12 @@ private enum BreakpointState {
 
 private struct InstructionRow: View {
     let op: Disassembler.Turbo9Operation
+    let targetSymbol: String?
     let isCurrent: Bool
+    let isZebra: Bool
     let breakpoint: BreakpointState
     let fontSize: CGFloat
+    let gotoOffset: (UInt16) -> Void
 
     var body: some View {
         HStack(spacing: 0) {
@@ -167,23 +191,76 @@ private struct InstructionRow: View {
                 .frame(width: labelColumnWidth, alignment: .leading)
                 .lineLimit(1)
 
-            // Mnemonic — bold accent
+            // Mnemonic — bolder + accent-colored on the current PC line
             Text(op.mnemonicText)
-                .font(.system(size: fontSize, weight: .semibold, design: .monospaced))
-                .foregroundColor(.primary)
+                .font(.system(size: fontSize,
+                              weight: isCurrent ? .bold : .semibold,
+                              design: .monospaced))
+                .foregroundColor(isCurrent ? Color.accentColor : .primary)
                 .frame(width: mnemonicColumnWidth, alignment: .leading)
 
-            // Operand — primary
-            Text(op.operandText)
-                .monospaced()
-                .font(.system(size: fontSize))
-                .foregroundColor(.primary)
-                .lineLimit(1)
+            // Operand — color-coded by addressing mode; hyperlinked when it
+            // targets a code address.
+            operandView
+
+            // Optional trailing comment: resolved symbol for a branch target.
+            if let symbol = targetSymbol {
+                Text("→ \(symbol)")
+                    .monospaced()
+                    .font(.system(size: fontSize))
+                    .foregroundColor(Color.purple.opacity(0.8))
+                    .lineLimit(1)
+                    .padding(.leading, 8)
+            }
 
             Spacer(minLength: 0)
         }
         .padding(.vertical, 1)
-        .background(isCurrent ? Color.accentColor.opacity(0.15) : Color.clear)
+        .background(rowBackground)
+    }
+
+    @ViewBuilder
+    private var operandView: some View {
+        let target = op.branchTarget
+        let base = Text(op.operandText)
+            .monospaced()
+            .font(.system(size: fontSize))
+            .foregroundColor(operandColor)
+            .lineLimit(1)
+        if let target {
+            base
+                .underline()
+                .help("Jump to \(String(format: "$%04X", target))")
+                .highPriorityGesture(
+                    TapGesture().onEnded { gotoOffset(target) }
+                )
+        } else {
+            base
+        }
+    }
+
+    /// Layered background: PC tint > zebra stripe > clear.
+    @ViewBuilder
+    private var rowBackground: some View {
+        if isCurrent {
+            Color.accentColor.opacity(0.18)
+        } else if isZebra {
+            Color.secondary.opacity(0.05)
+        } else {
+            Color.clear
+        }
+    }
+
+    /// Operand color keyed off the addressing mode.
+    private var operandColor: Color {
+        switch op.addressMode {
+        case .imm8, .imm16: return .orange     // #immediate
+        case .dir:          return .teal       // <direct
+        case .ext:          return .blue       // >extended
+        case .ind:          return .purple     // ,X / ,Y / ,U / ,S
+        case .rel8, .rel16: return .green      // branch target
+        case .inh:          return .secondary  // no operand
+        }
     }
 
     // Column widths derived from font size so they scale together.
