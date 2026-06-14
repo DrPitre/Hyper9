@@ -91,66 +91,100 @@ class Turbo9ViewModel: ObservableObject {
     }
 
     /// Append up to `lines` more disassembled instructions after the last cached
-    /// op, trimming from the front if the total would exceed `cap`. Used by the
-    /// disassembly view's sliding window when the user scrolls past the bottom.
+    /// op. The `cap` is a hard ceiling on the total cached op count — once
+    /// reached, the call no-ops (we do NOT trim from the front, because that
+    /// would yank rows out from under the user's scroll position). To free
+    /// space, reload via Goto / Follow PC, which resets the cache.
     /// Returns true if any new instructions were added.
     @discardableResult
     func extendDisassemblyForward(lines: Int, cap: Int) -> Bool {
         guard lines > 0, let last = turbo9.operations.last else { return false }
+        if turbo9.operations.count >= cap { return false }
         let firstNew = last.offset &+ UInt16(last.size)
         // Don't wrap past $FFFF — refuse to extend if we'd roll over.
         if firstNew < last.offset { return false }
+        let room = cap - turbo9.operations.count
+        let take = min(lines, room)
         var pc = firstNew
         var added = 0
-        while added < lines {
-            guard let op = turbo9.disassemble(pc: pc) else { break }
-            turbo9.operations.append(op)
-            let next = pc &+ UInt16(op.size)
-            if next <= pc { break }                 // wrap guard
-            pc = next
-            added += 1
-        }
-        if turbo9.operations.count > cap {
-            turbo9.operations.removeFirst(turbo9.operations.count - cap)
+        while added < take {
+            if let op = turbo9.disassemble(pc: pc) {
+                turbo9.operations.append(op)
+                let next = pc &+ UInt16(op.size)
+                if next <= pc { break }                 // wrap guard
+                pc = next
+                added += 1
+            } else {
+                // Unknown opcode — skip a byte and keep going so we don't
+                // stall the moment PC walks into a non-instruction byte.
+                let next = pc &+ 1
+                if next <= pc { break }
+                pc = next
+            }
         }
         if added > 0 { operations = turbo9.operations }
         return added > 0
     }
 
-    /// Prepend up to `lines` instructions before the first cached op. 6809
-    /// instructions are variable-length, so we scan forward from a point
-    /// `4 × lines` bytes earlier and keep only the sequence that aligns
-    /// exactly with the current top. Trims from the back if the total would
-    /// exceed `cap`. Returns true if any instructions were prepended.
+    /// Prepend up to `lines` instructions before the first cached op.
+    ///
+    /// 6809 instructions are variable-length and there's no way to walk
+    /// backwards directly, so we search: for each candidate starting offset
+    /// before `topAddr`, disassemble forward and check whether the last
+    /// instruction ends exactly at `topAddr` (i.e. the decode aligns with
+    /// the current top). We prefer the start that produces the *most* ops,
+    /// and stop early once we have at least `lines` of them.
+    ///
+    /// `cap` is a hard ceiling — once total cached ops reach it, we no-op
+    /// rather than trim from the back (which would yank away the user's
+    /// forward-scrollable rows and cascade).
     @discardableResult
     func extendDisassemblyBackward(lines: Int, cap: Int) -> Bool {
         guard lines > 0, let first = turbo9.operations.first else { return false }
+        if turbo9.operations.count >= cap { return false }
         let topAddr = first.offset
-        let scanBytes = min(Int(topAddr), max(16, lines * 4))
-        guard scanBytes > 0 else { return false }
-        let start = topAddr &- UInt16(scanBytes)
+        guard topAddr > 0 else { return false }
 
-        var collected: [Disassembler.Turbo9Operation] = []
-        var pc = start
-        while pc < topAddr {
-            guard let op = turbo9.disassemble(pc: pc) else { break }
-            let end = op.offset &+ UInt16(op.size)
-            if end > topAddr { break }
-            collected.append(op)
-            if end == topAddr { break }
-            pc = end
+        // Don't scan past $0000. Otherwise use enough headroom that we have
+        // a reasonable chance of finding an aligned sequence with `lines` ops.
+        let maxScan = min(Int(topAddr), max(64, lines * 8))
+
+        var bestSequence: [Disassembler.Turbo9Operation] = []
+
+        // Walk start offsets from farthest back to closest. The far-back
+        // starts produce more ops when they align, so the first alignment
+        // we find with ≥ lines ops is good enough — bail out then.
+        for startOffset in stride(from: maxScan, through: 1, by: -1) {
+            let start = topAddr &- UInt16(startOffset)
+            var collected: [Disassembler.Turbo9Operation] = []
+            var pc = start
+            var overshot = false
+            while pc < topAddr {
+                if let op = turbo9.disassemble(pc: pc) {
+                    let end = op.offset &+ UInt16(op.size)
+                    if end > topAddr { overshot = true; break }
+                    collected.append(op)
+                    if end == topAddr { break }
+                    pc = end
+                } else {
+                    pc = pc &+ 1
+                }
+            }
+            let aligned = !overshot &&
+                (collected.last.map { $0.offset &+ UInt16($0.size) == topAddr } ?? false)
+            guard aligned else { continue }
+            if collected.count > bestSequence.count {
+                bestSequence = collected
+                if bestSequence.count >= lines { break }
+            }
         }
-        // Alignment check — the last op must end exactly at the current top.
-        guard let lastOp = collected.last,
-              lastOp.offset &+ UInt16(lastOp.size) == topAddr else {
-            return false
-        }
-        let take = Array(collected.suffix(lines))
+
+        guard !bestSequence.isEmpty else { return false }
+        // Respect the cap: don't take more than there's room for.
+        let room = max(0, cap - turbo9.operations.count)
+        let take = Array(bestSequence.suffix(min(lines, room)))
         guard !take.isEmpty else { return false }
         turbo9.operations.insert(contentsOf: take, at: 0)
-        if turbo9.operations.count > cap {
-            turbo9.operations.removeLast(turbo9.operations.count - cap)
-        }
         operations = turbo9.operations
         return true
     }

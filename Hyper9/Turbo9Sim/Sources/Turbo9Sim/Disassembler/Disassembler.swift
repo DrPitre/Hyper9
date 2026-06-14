@@ -418,6 +418,10 @@ public class Disassembler {
         if pc != UInt16.max {
             cpu.PC = pc
         }
+        // Capture the start-of-instruction PC *after* any explicit override
+        // so the size field reflects the actual instruction length.
+        // (The earlier `oldPC` is kept around for restoring caller state.)
+        let startPC = cpu.PC
 
         // PC is a UInt16 and `cpu.bus.memory` is always 64 KB, so any address
         // is decodable. (The previous `program.isWithinBounds` check gated on
@@ -465,9 +469,9 @@ public class Disassembler {
                     cpu.PC = cpu.PC &+ 1
                     let swi2Operand = getOperand(using: .imm8, offset: cpu.PC)
                     let os9 = OpCode(.swi2, .imm8, 1)
-                    operation = Turbo9Operation(label: label, offset: offset, preByte: prebyte, opcode: opcodeByte, instruction: os9.0, addressMode: opcode.1, operand: swi2Operand, postOperand: postOperand, size: cpu.PC &- oldPC)
+                    operation = Turbo9Operation(label: label, offset: offset, preByte: prebyte, opcode: opcodeByte, instruction: os9.0, addressMode: opcode.1, operand: swi2Operand, postOperand: postOperand, size: cpu.PC &- startPC)
                 } else {
-                    operation = Turbo9Operation(label: label, offset: offset, preByte: prebyte, opcode: opcodeByte, instruction: opcode.0, addressMode: opcode.1, operand: operand, postOperand: postOperand, size: cpu.PC &- oldPC)
+                    operation = Turbo9Operation(label: label, offset: offset, preByte: prebyte, opcode: opcodeByte, instruction: opcode.0, addressMode: opcode.1, operand: operand, postOperand: postOperand, size: cpu.PC &- startPC)
                 }
             }
         }
@@ -487,10 +491,17 @@ public class Disassembler {
 
     public func disassemble(instructionCount: UInt = 1, startPC: UInt16 = UInt16.max) -> [String] {
         let oldPC = cpu.PC
+        if startPC != UInt16.max { cpu.PC = startPC }
         for _ in 0..<instructionCount {
             if let op = disassemble(pc: cpu.PC) {
                 cpu.PC = cpu.PC &+ UInt16(op.size)
                 operations.append(op)
+            } else {
+                // Unknown opcode at this byte. Skip it so the loop advances
+                // instead of spinning in place — otherwise the disassembly
+                // stalls the first time PC walks into data, padding, or any
+                // byte the 6809 opcode table doesn't recognize.
+                cpu.PC = cpu.PC &+ 1
             }
         }
         cpu.PC = oldPC

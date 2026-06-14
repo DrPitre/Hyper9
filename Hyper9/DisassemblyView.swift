@@ -25,6 +25,12 @@ struct DisassemblyView: View {
     /// Rows close to the top/bottom of the cached list that trigger a fetch
     /// when they appear (i.e. the user has scrolled to the edge).
     private let edgeTrigger: Int = 3
+    /// Min interval between extensions in the same direction. Without this,
+    /// prepending rows at index 0 fires `.onAppear` again on the new index 0,
+    /// cascading until the cap is hit.
+    private let extensionCooldown: TimeInterval = 0.25
+    @State private var lastBackwardFire: Date = .distantPast
+    @State private var lastForwardFire: Date = .distantPast
 
     var body: some View {
         GroupBox {
@@ -45,8 +51,15 @@ struct DisassemblyView: View {
                     ScrollViewReader { proxy in
                         ScrollView {
                             LazyVStack(alignment: .leading, spacing: 0) {
-                                ForEach(model.operations.indices, id: \.self) { index in
-                                    let op = model.operations[index]
+                                // Key by op.offset so SwiftUI's diffing tracks
+                                // each instruction by its address, not by its
+                                // position in the array. Using index identity
+                                // here led to clicks binding to the wrong row
+                                // whenever the ops array was rebuilt/shifted
+                                // (snapToPC, sliding-window edge extension,
+                                // PC change after a run+pause). Pass index
+                                // alongside for zebra striping / edge fetch.
+                                ForEach(Array(model.operations.enumerated()), id: \.element.offset) { index, op in
                                     let isCurrent = (model.PC == op.offset) && model.running == false
                                     let bpState = breakpointState(at: op.offset)
                                     InstructionRow(
@@ -63,7 +76,6 @@ struct DisassemblyView: View {
                                             scrollToTarget(target, proxy: proxy)
                                         }
                                     )
-                                    .id(op.offset)
                                     .contentShape(Rectangle())
                                     .onTapGesture { toggleBreakpoint(at: op.offset) }
                                     .onAppear { handleRowAppear(index: index) }
@@ -86,6 +98,15 @@ struct DisassemblyView: View {
                         .onChange(of: followPC) { enabled in
                             if enabled { scrollToPC(proxy: proxy, animated: true) }
                         }
+                        .onChange(of: model.running) { isRunning in
+                            // PLAY just pressed — snap to PC so the user can see
+                            // where execution is starting from, even if they'd
+                            // scrolled away. Bypass the normal scrollToPC guards
+                            // (which suppress scrolling while `running` is true).
+                            if isRunning {
+                                snapToPC(proxy: proxy)
+                            }
+                        }
                     }
                 }
                 .frame(minWidth: 480, idealWidth: 640, maxWidth: .infinity,
@@ -106,16 +127,19 @@ struct DisassemblyView: View {
     }
 
     /// Sliding-window trigger: when a row near either edge of the cached ops
-    /// appears, fetch more in that direction and trim the opposite end so the
-    /// total stays at or below `windowCap`. Runs regardless of Follow PC —
-    /// Follow PC controls auto-recentering on PC change, not whether the user
-    /// can browse beyond the cached window.
+    /// appears, fetch more in that direction. Cooldown-gated so a single
+    /// user scroll doesn't fire repeatedly while LazyVStack churn settles.
     private func handleRowAppear(index: Int) {
         let count = model.operations.count
         guard count > 0 else { return }
+        let now = Date()
         if index <= edgeTrigger {
+            guard now.timeIntervalSince(lastBackwardFire) > extensionCooldown else { return }
+            lastBackwardFire = now
             model.extendDisassemblyBackward(lines: edgeChunk, cap: windowCap)
         } else if index >= count - 1 - edgeTrigger {
+            guard now.timeIntervalSince(lastForwardFire) > extensionCooldown else { return }
+            lastForwardFire = now
             model.extendDisassemblyForward(lines: edgeChunk, cap: windowCap)
         }
     }
@@ -130,6 +154,26 @@ struct DisassemblyView: View {
             }
         } else {
             proxy.scrollTo(pc, anchor: .center)
+        }
+    }
+
+    /// One-shot scroll to the current PC that bypasses the `running` guard.
+    /// If PC isn't in the cached operations (the user has scrolled far from
+    /// it), refill the cache around PC first. Used when the user presses PLAY.
+    private func snapToPC(proxy: ScrollViewProxy) {
+        let pc = model.PC
+        if !model.operations.contains(where: { $0.offset == pc }) {
+            // Rebuild the cache so it's centered on PC.
+            model.turbo9.operations = []
+            model.turbo9.checkDisassembly()
+            model.updateMemoryView()
+        }
+        // Defer to next runloop tick so SwiftUI has a chance to realize the
+        // newly-published ops before we try to scroll to one of their ids.
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                proxy.scrollTo(pc, anchor: .center)
+            }
         }
     }
 

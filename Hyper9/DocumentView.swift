@@ -14,7 +14,14 @@ struct DocumentView: View {
     @Binding var document: SimDocument
     @EnvironmentObject var model: Turbo9ViewModel
     @State private var breakpoints: [Breakpoint] = []
-    @State private var selectedTab: LeftTab = .breakpoints
+    // Persists across launches/documents so the last lower-left tab the user
+    // had open is restored. AppStorage only handles primitives, so we store
+    // the raw string and expose a typed `selectedTab` that reads/writes it.
+    @AppStorage("Hyper9.LeftTab") private var selectedTabRaw: String = LeftTab.breakpoints.rawValue
+    private var selectedTab: LeftTab {
+        get { LeftTab(rawValue: selectedTabRaw) ?? .breakpoints }
+        nonmutating set { selectedTabRaw = newValue.rawValue }
+    }
 
     private enum LeftTab: String, CaseIterable, Identifiable {
         case breakpoints, terminal, globals, modules, processes
