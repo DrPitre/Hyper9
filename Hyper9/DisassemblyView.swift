@@ -10,6 +10,24 @@ extension String {
     }
 }
 
+/// Shared column metrics for the disassembly view. The header row and each
+/// InstructionRow read from the same source so they stay aligned pixel-for-pixel
+/// even if any width is tweaked.
+private enum DisasmColumns {
+    /// SF Mono em width ≈ 0.62 × point size.
+    static func charWidth(_ fontSize: CGFloat) -> CGFloat { fontSize * 0.62 }
+    static func address(_ fontSize: CGFloat)  -> CGFloat { charWidth(fontSize) * 5 }   // "C100 "
+    static func bytes(_ fontSize: CGFloat)    -> CGFloat { charWidth(fontSize) * 10 }  // up to 8 hex + slack
+    static func label(_ fontSize: CGFloat)    -> CGFloat { charWidth(fontSize) * 18 }
+    static func mnemonic(_ fontSize: CGFloat) -> CGFloat { charWidth(fontSize) * 8 }
+    /// Width of the breakpoint-dot gutter on the very left.
+    static let gutter: CGFloat = 16
+    /// Width of the PC accent bar that lives between gutter and the address.
+    static let accentBar: CGFloat = 3
+    /// Trailing padding after the accent bar before the address column begins.
+    static let accentTrailingPad: CGFloat = 6
+}
+
 struct DisassemblyView: View {
     @EnvironmentObject var model : Turbo9ViewModel
     @Binding var breakpoints: [Breakpoint]
@@ -46,6 +64,8 @@ struct DisassemblyView: View {
                 }
                 .padding(.horizontal, 6)
                 .padding(.bottom, 4)
+
+                headerRow
 
                 GeometryReader { geo in
                     ScrollViewReader { proxy in
@@ -124,6 +144,61 @@ struct DisassemblyView: View {
         // before the sliding-window edge triggers kick in.
         let needed = max(visible * 3, 60)
         model.ensureDisassembly(lineCount: needed)
+    }
+
+    /// Column-label header that sits above the scrollable LazyVStack of rows.
+    /// Mirrors InstructionRow's HStack precisely — same column widths via
+    /// DisasmColumns, same gutter/accent placeholders — so the labels line up
+    /// exactly above their data columns. Lives in the outer VStack as a
+    /// sibling of the GeometryReader, so it does NOT scroll with the rows.
+    private var headerRow: some View {
+        let headerFont = Font.system(size: fontSize - 2, weight: .semibold, design: .monospaced)
+        // Important: the whole HStack gets a fixed height. Without it, the
+        // Color.clear placeholders in the gutter/accent slots are height-greedy
+        // and the header expands to fill all available vertical space, pushing
+        // the GeometryReader's scroll area way down (the "uhoh" gap regression).
+        let rowHeight = fontSize + 8
+        return HStack(spacing: 0) {
+            // Gutter (where breakpoint dots appear in rows)
+            Color.clear.frame(width: DisasmColumns.gutter, height: rowHeight)
+            // Accent bar placeholder (where PC indicator appears in rows)
+            Color.clear
+                .frame(width: DisasmColumns.accentBar, height: rowHeight)
+                .padding(.trailing, DisasmColumns.accentTrailingPad)
+
+            Text("ADDR")
+                .font(headerFont)
+                .foregroundColor(.secondary)
+                .frame(width: DisasmColumns.address(fontSize), alignment: .leading)
+
+            Text("BYTES")
+                .font(headerFont)
+                .foregroundColor(.secondary)
+                .frame(width: DisasmColumns.bytes(fontSize), alignment: .leading)
+
+            Text("LABEL")
+                .font(headerFont)
+                .foregroundColor(.secondary)
+                .frame(width: DisasmColumns.label(fontSize), alignment: .leading)
+
+            Text("OP")
+                .font(headerFont)
+                .foregroundColor(.secondary)
+                .frame(width: DisasmColumns.mnemonic(fontSize), alignment: .leading)
+
+            Text("OPERAND")
+                .font(headerFont)
+                .foregroundColor(.secondary)
+
+            Spacer(minLength: 0)
+        }
+        .frame(height: rowHeight)
+        .background(Color.secondary.opacity(0.08))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.secondary.opacity(0.25))
+                .frame(height: 0.5)
+        }
     }
 
     /// Sliding-window trigger: when a row near either edge of the cached ops
@@ -236,13 +311,13 @@ private struct InstructionRow: View {
                     EmptyView()
                 }
             }
-            .frame(width: 16)
+            .frame(width: DisasmColumns.gutter)
 
             // Left accent bar: highlights current PC
             Rectangle()
                 .fill(isCurrent ? Color.accentColor : Color.clear)
-                .frame(width: 3)
-                .padding(.trailing, 6)
+                .frame(width: DisasmColumns.accentBar)
+                .padding(.trailing, DisasmColumns.accentTrailingPad)
 
             // Address — dim, fixed width
             Text(op.addressText)
@@ -339,10 +414,10 @@ private struct InstructionRow: View {
     }
 
     // Column widths derived from font size so they scale together.
-    private var charWidth: CGFloat { fontSize * 0.62 }
-    private var addressColumnWidth: CGFloat { charWidth * 5 }   // "C100 "
-    private var bytesColumnWidth: CGFloat { charWidth * 10 }    // up to 8 hex + slack
-    private var labelColumnWidth: CGFloat { charWidth * 18 }
-    private var mnemonicColumnWidth: CGFloat { charWidth * 8 }
+    private var charWidth: CGFloat { DisasmColumns.charWidth(fontSize) }
+    private var addressColumnWidth: CGFloat { DisasmColumns.address(fontSize) }
+    private var bytesColumnWidth: CGFloat { DisasmColumns.bytes(fontSize) }
+    private var labelColumnWidth: CGFloat { DisasmColumns.label(fontSize) }
+    private var mnemonicColumnWidth: CGFloat { DisasmColumns.mnemonic(fontSize) }
 }
 
