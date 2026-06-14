@@ -96,6 +96,15 @@ struct MemoryView: View {
                 .onChange(of: followPC) { enabled in
                     if enabled { scrollToPC(proxy: proxy, animated: true) }
                 }
+                .onChange(of: model.memoryGotoTarget) { target in
+                    guard let target else { return }
+                    let row = Int(target) / 16
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        proxy.scrollTo(row, anchor: .top)
+                    }
+                    // Reset on next runloop so the same address can be sent again later.
+                    DispatchQueue.main.async { model.memoryGotoTarget = nil }
+                }
                 .onAppear { scrollToPC(proxy: proxy, animated: false) }
             }
         } label: {
