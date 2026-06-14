@@ -18,6 +18,14 @@ struct DisassemblyView: View {
     private let fontSize: CGFloat = 14
     private let lineHeight: CGFloat = 20
 
+    /// Sliding-window bounds: how many ops we add per scroll-edge trigger and
+    /// the hard cap that prevents the array from growing without bound.
+    private let edgeChunk: Int = 32
+    private let windowCap: Int = 300
+    /// Rows close to the top/bottom of the cached list that trigger a fetch
+    /// when they appear (i.e. the user has scrolled to the edge).
+    private let edgeTrigger: Int = 3
+
     var body: some View {
         GroupBox {
             VStack(spacing: 0) {
@@ -58,6 +66,7 @@ struct DisassemblyView: View {
                                     .id(op.offset)
                                     .contentShape(Rectangle())
                                     .onTapGesture { toggleBreakpoint(at: op.offset) }
+                                    .onAppear { handleRowAppear(index: index) }
                                 }
                             }
                         }
@@ -68,7 +77,10 @@ struct DisassemblyView: View {
                         .onChange(of: geo.size.height) { _ in fillDisassembly(for: geo.size.height) }
                         .onChange(of: model.operations.count) { _ in
                             fillDisassembly(for: geo.size.height)
-                            scrollToPC(proxy: proxy, animated: true)
+                            // Only chase PC on count changes when we're following
+                            // it. Otherwise an edge-triggered extension would
+                            // yank the view back to PC mid-scroll.
+                            if followPC { scrollToPC(proxy: proxy, animated: true) }
                         }
                         .onChange(of: model.PC) { _ in scrollToPC(proxy: proxy, animated: true) }
                         .onChange(of: followPC) { enabled in
@@ -85,8 +97,27 @@ struct DisassemblyView: View {
     }
 
     private func fillDisassembly(for height: CGFloat) {
-        let needed = max(1, Int(ceil(height / lineHeight)))
+        let visible = max(1, Int(ceil(height / lineHeight)))
+        // Pre-fill comfortably more than what fits on screen so the scroll
+        // bar is active and the user has room to drag past the visible edge
+        // before the sliding-window edge triggers kick in.
+        let needed = max(visible * 3, 60)
         model.ensureDisassembly(lineCount: needed)
+    }
+
+    /// Sliding-window trigger: when a row near either edge of the cached ops
+    /// appears, fetch more in that direction and trim the opposite end so the
+    /// total stays at or below `windowCap`. Runs regardless of Follow PC —
+    /// Follow PC controls auto-recentering on PC change, not whether the user
+    /// can browse beyond the cached window.
+    private func handleRowAppear(index: Int) {
+        let count = model.operations.count
+        guard count > 0 else { return }
+        if index <= edgeTrigger {
+            model.extendDisassemblyBackward(lines: edgeChunk, cap: windowCap)
+        } else if index >= count - 1 - edgeTrigger {
+            model.extendDisassemblyForward(lines: edgeChunk, cap: windowCap)
+        }
     }
 
     private func scrollToPC(proxy: ScrollViewProxy, animated: Bool) {

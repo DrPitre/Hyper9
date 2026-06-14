@@ -23,6 +23,9 @@ class Turbo9ViewModel: ObservableObject {
     /// Set by other views (e.g. Module Directory, Processes) to ask MemoryView
     /// to scroll to a specific address. MemoryView consumes and resets it.
     @Published var memoryGotoTarget: UInt16? = nil
+
+    @Published var symbolStatus: String = ""
+
     // Previous values, captured at the start of each updateUI(), for highlighting
     // what changed since the last step. Highlights are gated by `!running`.
     @Published var previousA: UInt8 = 0x00
@@ -87,6 +90,71 @@ class Turbo9ViewModel: ObservableObject {
         operations = turbo9.operations
     }
 
+    /// Append up to `lines` more disassembled instructions after the last cached
+    /// op, trimming from the front if the total would exceed `cap`. Used by the
+    /// disassembly view's sliding window when the user scrolls past the bottom.
+    /// Returns true if any new instructions were added.
+    @discardableResult
+    func extendDisassemblyForward(lines: Int, cap: Int) -> Bool {
+        guard lines > 0, let last = turbo9.operations.last else { return false }
+        let firstNew = last.offset &+ UInt16(last.size)
+        // Don't wrap past $FFFF — refuse to extend if we'd roll over.
+        if firstNew < last.offset { return false }
+        var pc = firstNew
+        var added = 0
+        while added < lines {
+            guard let op = turbo9.disassemble(pc: pc) else { break }
+            turbo9.operations.append(op)
+            let next = pc &+ UInt16(op.size)
+            if next <= pc { break }                 // wrap guard
+            pc = next
+            added += 1
+        }
+        if turbo9.operations.count > cap {
+            turbo9.operations.removeFirst(turbo9.operations.count - cap)
+        }
+        if added > 0 { operations = turbo9.operations }
+        return added > 0
+    }
+
+    /// Prepend up to `lines` instructions before the first cached op. 6809
+    /// instructions are variable-length, so we scan forward from a point
+    /// `4 × lines` bytes earlier and keep only the sequence that aligns
+    /// exactly with the current top. Trims from the back if the total would
+    /// exceed `cap`. Returns true if any instructions were prepended.
+    @discardableResult
+    func extendDisassemblyBackward(lines: Int, cap: Int) -> Bool {
+        guard lines > 0, let first = turbo9.operations.first else { return false }
+        let topAddr = first.offset
+        let scanBytes = min(Int(topAddr), max(16, lines * 4))
+        guard scanBytes > 0 else { return false }
+        let start = topAddr &- UInt16(scanBytes)
+
+        var collected: [Disassembler.Turbo9Operation] = []
+        var pc = start
+        while pc < topAddr {
+            guard let op = turbo9.disassemble(pc: pc) else { break }
+            let end = op.offset &+ UInt16(op.size)
+            if end > topAddr { break }
+            collected.append(op)
+            if end == topAddr { break }
+            pc = end
+        }
+        // Alignment check — the last op must end exactly at the current top.
+        guard let lastOp = collected.last,
+              lastOp.offset &+ UInt16(lastOp.size) == topAddr else {
+            return false
+        }
+        let take = Array(collected.suffix(lines))
+        guard !take.isEmpty else { return false }
+        turbo9.operations.insert(contentsOf: take, at: 0)
+        if turbo9.operations.count > cap {
+            turbo9.operations.removeLast(turbo9.operations.count - cap)
+        }
+        operations = turbo9.operations
+        return true
+    }
+
     func step() {
         do {
             try turbo9.step()
@@ -106,6 +174,28 @@ class Turbo9ViewModel: ObservableObject {
         } catch {
 
         }
+    }
+
+    /// Load (or reload) a `.map` symbol file picked by the user. Refreshes the
+    /// disassembly so labels and branch annotations appear immediately.
+    func loadSymbols(from url: URL) {
+        do {
+            try turbo9.loadSymbols(from: url)
+            symbolStatus = "Loaded \(turbo9.symbolCount) symbols from \(url.lastPathComponent)"
+            turbo9.checkDisassembly()
+            updateUI()
+        } catch {
+            symbolStatus = "Failed to load \(url.lastPathComponent)"
+        }
+    }
+
+    /// Module-relative `.map` files (typical for OS-9 / TurbOS modules) need a
+    /// base added to each symbol address so lookups match the runtime PC.
+    /// Setting this triggers a disassembly refresh.
+    func setSymbolBase(_ base: UInt16) {
+        turbo9.symbolBase = base
+        turbo9.checkDisassembly()
+        updateUI()
     }
 
     /// Restore a full 64 KB memory snapshot (e.g. when opening a document).
@@ -155,6 +245,13 @@ class Turbo9ViewModel: ObservableObject {
             lastInputDeliveryCycle = 0
             outputString = ""
             instructionsPerSecond = 0.0
+            // The CPU's PC has jumped to the reset vector. Invalidate any
+            // cached disassembly so checkDisassembly() rebuilds from the new
+            // PC, then publish both the fresh ops and memory to the views.
+            turbo9.operations = []
+            turbo9.checkDisassembly()
+            updateUI()
+            updateMemoryView()
         } catch {
 
         }

@@ -12,6 +12,7 @@ struct ControlView: View {
     @EnvironmentObject var model: Turbo9ViewModel
     @State var stepCount : UInt16 = 1
     @State var goLabel = "play.fill"
+    @State private var symbolBase: UInt16 = 0x0000
 
     var body: some View {
         let cyclesPerTick : UInt = 1000
@@ -194,6 +195,33 @@ struct ControlView: View {
                     }
                     .help("Load an image file (.img) and reset")
                     .disabled(model.running == true)
+
+                    Button(action: {
+                        let openPanel = NSOpenPanel()
+                        openPanel.title = "Choose a symbol map file"
+                        openPanel.showsHiddenFiles = false
+                        openPanel.canChooseDirectories = false
+                        openPanel.canChooseFiles = true
+                        openPanel.allowsMultipleSelection = false
+                        if let mapType = UTType(filenameExtension: "map") {
+                            openPanel.allowedContentTypes = [mapType]
+                        }
+                        openPanel.begin { (result) in
+                            if result == .OK, let url = openPanel.url {
+                                model.loadSymbols(from: url)
+                                model.updateUI()
+                            }
+                        }
+                    }) {
+                        Image(systemName: "tag.fill")
+                    }
+                    .help("Load a symbol map (.map) file to annotate the disassembly")
+                    .disabled(model.running == true)
+
+                    Hex16TextField(number: $symbolBase) {
+                        model.setSymbolBase(symbolBase)
+                    }
+                    .help("Symbol base — added to module-relative .map addresses so labels match the runtime PC")
 
                     Button(action: {
                         model.reset()

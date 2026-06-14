@@ -11,8 +11,12 @@ private class Symbol {
         self.address = address
     }
 
-    init(line: String) {
-        let tokens = line.components(separatedBy: " ")
+    /// Failable parse of one `Symbol:` line. Returns nil for malformed lines
+    /// (too few tokens, non-hex address, etc.) instead of crashing.
+    init?(line: String) {
+        let tokens = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+        guard tokens.count >= 5 else { return nil }
+        guard let addr = UInt16(tokens[4], radix: 16) else { return nil }
         var theLabel = tokens[1]
         if theLabel.hasPrefix(".static.function.") {
             theLabel = String(theLabel.dropFirst(".static.function.".count))
@@ -25,7 +29,7 @@ private class Symbol {
         }
         self.label = theLabel
         self.file = tokens[2]
-        self.address = UInt16(tokens[4], radix: 16)!
+        self.address = addr
     }
 }
 
@@ -105,25 +109,48 @@ public class Disassembler {
 
     struct SymbolTable {
         fileprivate var symbols: [Symbol] = []
+        /// Raw `.map` file contents, kept so we can re-persist the table inside a
+        /// document snapshot. Nil until a map is loaded.
+        fileprivate var sourceText: String?
+        /// Base added to module-relative symbols when matching against an
+        /// absolute address. Used because OS-9 / TurbOS module `.map` files
+        /// store labels as offsets from the module start, not absolute PCs.
+        var base: UInt16 = 0
 
         init() {}
 
         init(symbolFileURL: URL) {
-            do {
-                let symbolFileContents = try String(contentsOf: symbolFileURL)
-                let lines = symbolFileContents.components(separatedBy: .newlines)
-                for line in lines {
-                    if line.hasPrefix("Symbol:") {
-                        symbols.append(Symbol(line: line))
-                    }
-                }
-            } catch {
+            if let contents = try? String(contentsOf: symbolFileURL) {
+                self.init(text: contents)
+            } else {
+                self.init()
             }
         }
 
+        init(text: String) {
+            self.sourceText = text
+            let lines = text.components(separatedBy: .newlines)
+            for line in lines where line.hasPrefix("Symbol:") {
+                if let symbol = Symbol(line: line) {
+                    symbols.append(symbol)
+                }
+            }
+        }
+
+        /// Look up a symbol for the given absolute address.
+        ///
+        /// `.map` files routinely mix absolute equates (e.g. `MappedIOStart = $FF00`)
+        /// and module-relative labels (e.g. a label at offset `$0042` inside a
+        /// module loaded at `$E800`). We try the literal address first; if that
+        /// misses and `base` is non-zero, we also try `address - base` so a
+        /// caller passing the absolute PC still hits the module-relative label.
         func lookup(address: UInt16) -> String {
-            for symbol in symbols {
-                if symbol.address == address {
+            for symbol in symbols where symbol.address == address {
+                return symbol.label
+            }
+            if base != 0, address >= base {
+                let rel = address &- base
+                for symbol in symbols where symbol.address == rel {
                     return symbol.label
                 }
             }
@@ -186,6 +213,47 @@ public class Disassembler {
         symbolTable.lookup(address: address)
     }
 
+    /// Raw text of the most recently loaded `.map` file, if any. Used to persist
+    /// symbols inside a document snapshot.
+    public var symbolMapText: String? {
+        symbolTable.sourceText
+    }
+
+    /// Number of parsed entries in the symbol table.
+    public var symbolCount: Int {
+        symbolTable.symbols.count
+    }
+
+    /// Base added to module-relative symbol addresses during lookup. Defaults to 0.
+    /// Set this when the loaded `.map` was assembled relative to a module start
+    /// that ends up elsewhere in the 64 KB image at runtime.
+    public var symbolBase: UInt16 {
+        get { symbolTable.base }
+        set {
+            symbolTable.base = newValue
+            operations = []
+        }
+    }
+
+    /// Reload symbols from a `.map` file picked by the user. Throws if the file
+    /// cannot be read; malformed individual lines are skipped silently.
+    public func loadSymbols(from url: URL) throws {
+        let text = try String(contentsOf: url)
+        symbolTable = SymbolTable(text: text)
+        operations = []
+    }
+
+    /// Replace the current symbol table with one parsed from the given `.map` text.
+    /// Pass nil or empty to clear symbols. Used when restoring document snapshots.
+    public func loadSymbols(text: String?) {
+        if let text, !text.isEmpty {
+            symbolTable = SymbolTable(text: text)
+        } else {
+            symbolTable = SymbolTable()
+        }
+        operations = []
+    }
+
     // MARK: - Document snapshot (memory + CPU registers)
 
     // Format v1:
@@ -195,6 +263,9 @@ public class Disassembler {
     //   bytes  8..21  CPU registers: A, B, DP, CC, X, Y, U, S, PC
     //                 (UInt16 values are big-endian)
     //   bytes 22..    64 KB of memory
+    //   bytes 65558.. (optional) 4-byte big-endian UInt32 length followed by
+    //                 that many UTF-8 bytes of `.map` symbol text. Older
+    //                 documents that lack this trailing section still load.
     private static let snapshotMagic: [UInt8] = [0x48, 0x59, 0x50, 0x39] // "HYP9"
     private static let snapshotVersion: UInt8 = 1
     private static let snapshotHeaderSize = 8
@@ -222,11 +293,31 @@ public class Disassembler {
         appendBE(cpu.S)
         appendBE(cpu.PC)
         data.append(contentsOf: cpu.bus.memory)
+
+        // Optional trailing symbol section.
+        if let text = symbolMapText,
+           !text.isEmpty,
+           let textData = text.data(using: .utf8) {
+            let len = UInt32(textData.count)
+            data.append(UInt8((len >> 24) & 0xFF))
+            data.append(UInt8((len >> 16) & 0xFF))
+            data.append(UInt8((len >>  8) & 0xFF))
+            data.append(UInt8( len        & 0xFF))
+            data.append(textData)
+        }
         return data
     }
 
     /// Restore a document snapshot. Accepts either the versioned format above
-    /// or a legacy raw 64 KB memory dump (in which case the CPU is reset).
+    /// or a legacy raw 64 KB memory dump.
+    ///
+    /// In both cases, the CPU is **reset** after the memory is restored — PC
+    /// jumps to the address held in the loaded memory's reset vector and the
+    /// other registers are zeroed. Any register values written by an earlier
+    /// `documentSnapshotData()` call are ignored on load (kept in the file for
+    /// forward-compatibility but not used). The rationale: a document is a
+    /// memory + symbols snapshot, not a paused execution state — opening one
+    /// should boot fresh, not resume mid-instruction.
     public func loadDocumentSnapshot(_ data: Data) {
         let bytes = [UInt8](data)
         let header = Disassembler.snapshotMagic
@@ -241,32 +332,39 @@ public class Disassembler {
             return
         }
 
-        // Memory
+        // Memory (exactly 64 KB, padded or truncated as needed)
         let memOffset = Disassembler.snapshotMemoryOffset
-        var mem = Array(bytes.dropFirst(memOffset))
+        let availableMem = max(0, bytes.count - memOffset)
+        let memBytesAvail = min(0x10000, availableMem)
+        var mem = Array(bytes[memOffset ..< memOffset + memBytesAvail])
         if mem.count < 0x10000 {
             mem.append(contentsOf: [UInt8](repeating: 0, count: 0x10000 - mem.count))
-        } else if mem.count > 0x10000 {
-            mem = Array(mem.prefix(0x10000))
         }
         cpu.bus.memory = mem
         cpu.bus.originalRam = mem
         operations = []
 
-        // Registers
-        let r = Disassembler.snapshotHeaderSize
-        cpu.A  = bytes[r]
-        cpu.B  = bytes[r + 1]
-        cpu.DP = bytes[r + 2]
-        cpu.CC = bytes[r + 3]
-        func readBE(_ off: Int) -> UInt16 {
-            (UInt16(bytes[r + off]) << 8) | UInt16(bytes[r + off + 1])
+        // Boot the CPU from the freshly-loaded memory's reset vector.
+        // (Saved register bytes at offsets 8..21 are deliberately ignored.)
+        try? cpu.reset()
+
+        // Optional trailing symbol section
+        let trailStart = memOffset + 0x10000
+        if bytes.count >= trailStart + 4 {
+            let len = (UInt32(bytes[trailStart])     << 24)
+                    | (UInt32(bytes[trailStart + 1]) << 16)
+                    | (UInt32(bytes[trailStart + 2]) <<  8)
+                    |  UInt32(bytes[trailStart + 3])
+            let textStart = trailStart + 4
+            if len > 0, bytes.count >= textStart + Int(len) {
+                let slice = bytes[textStart ..< textStart + Int(len)]
+                if let text = String(data: Data(slice), encoding: .utf8) {
+                    loadSymbols(text: text)
+                }
+            } else if len == 0 {
+                loadSymbols(text: nil)
+            }
         }
-        cpu.X  = readBE(4)
-        cpu.Y  = readBE(6)
-        cpu.U  = readBE(8)
-        cpu.S  = readBE(10)
-        cpu.PC = readBE(12)
     }
 
     public init(from url: URL, pc: UInt16 = 0x00) {
@@ -321,7 +419,12 @@ public class Disassembler {
             cpu.PC = pc
         }
 
-        if program.isWithinBounds(cpu.PC) {
+        // PC is a UInt16 and `cpu.bus.memory` is always 64 KB, so any address
+        // is decodable. (The previous `program.isWithinBounds` check gated on
+        // the loaded .img's byte count, which capped disassembly at whatever
+        // small region the original file occupied and broke once memory was
+        // restored from a document or written to outside that range.)
+        do {
             let offset = cpu.PC
             var prebyte: PreByte = .none
             var opcodeByte = cpu.readByte(cpu.PC)
@@ -395,6 +498,10 @@ public class Disassembler {
     }
 
     public func checkDisassembly() {
+        if operations.isEmpty {
+            let _ = disassemble(instructionCount: 30, startPC: cpu.PC)
+            return
+        }
         if let last = operations.last, let first = operations.first {
             if cpu.PC >= last.offset || cpu.PC <= first.offset {
                 operations = []
