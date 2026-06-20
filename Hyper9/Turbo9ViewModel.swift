@@ -53,6 +53,9 @@ class Turbo9ViewModel: ObservableObject {
     @Published var running = false
     public var timerRunning = false
     public var instructionsPerSecond = 0.0
+    /// Target CPU clock rate in cycles per second for the run loop.
+    /// 0 means unthrottled (run as fast as possible).
+    @Published var targetClockHz: Int = 0
     private let fileLogger: DDFileLogger = DDFileLogger() // File Logger
     private var logBuffer : String = ""
 

@@ -39,13 +39,22 @@ struct ControlView: View {
                 model.running = true
                 goLabel = "pause.fill"
                 model.updateCPU()
+                let targetClockHz = model.targetClockHz
                 DispatchQueue.global(qos: .userInitiated).async {
                     let startTime = Date()
+                    let startCycles = model.turbo9.clockCycles
                     var instructionCount = 0
                     var breakpoint = false
                     var pendingUIUpdate = false
                     var lastUIUpdateTime = startTime
                     let uiUpdateInterval: TimeInterval = 0.05  // ~20 fps live status
+                    // 0 Hz means "unthrottled". Otherwise pace against a wall-clock
+                    // target derived from elapsed CPU clock cycles so the emulator
+                    // runs at (approximately) the requested cycle rate. Sleeps are
+                    // chunked to ≤ 50 ms so Pause stays responsive.
+                    let throttled = targetClockHz > 0
+                    let secondsPerCycle: TimeInterval = throttled ? 1.0 / Double(targetClockHz) : 0
+                    let maxSleepChunk: TimeInterval = 0.05
                     repeat {
                         if breakpoint == false {
                             model.step()
@@ -54,7 +63,33 @@ struct ControlView: View {
                             if model.timerRunning == true && model.turbo9.clockCycles % cyclesPerTick == 0 {
                                 model.invokeTimer()
                             }
-                            if instructionCount % 1_000 == 0 && !pendingUIUpdate {
+                            if throttled {
+                                let cyclesElapsed = model.turbo9.clockCycles &- startCycles
+                                let target = startTime.addingTimeInterval(Double(cyclesElapsed) * secondsPerCycle)
+                                var now = Date()
+                                while now < target && model.running {
+                                    let remaining = target.timeIntervalSince(now)
+                                    Thread.sleep(forTimeInterval: min(remaining, maxSleepChunk))
+                                    // Refresh UI mid-sleep so low-rate runs still tick visibly.
+                                    let mid = Date()
+                                    if mid.timeIntervalSince(lastUIUpdateTime) >= uiUpdateInterval && !pendingUIUpdate {
+                                        lastUIUpdateTime = mid
+                                        pendingUIUpdate = true
+                                        let elapsed = mid.timeIntervalSince(startTime)
+                                        let ips = elapsed > 0 ? Double(instructionCount) / elapsed : 0
+                                        DispatchQueue.main.async {
+                                            model.instructionsPerSecond = ips
+                                            model.updateUI()
+                                            pendingUIUpdate = false
+                                        }
+                                    }
+                                    now = Date()
+                                }
+                            }
+                            // UI update — wall-clock paced so it fires at any rate,
+                            // not just every 1000 instructions. Amortize the Date()
+                            // call in the hot unthrottled path with the % 1000 gate.
+                            if !pendingUIUpdate && (throttled || instructionCount % 1_000 == 0) {
                                 let now = Date()
                                 if now.timeIntervalSince(lastUIUpdateTime) >= uiUpdateInterval {
                                     lastUIUpdateTime = now
@@ -162,6 +197,22 @@ struct ControlView: View {
                     }
                     .help("Step Into — execute one instruction (⌘;)")
                     .keyboardShortcut(";", modifiers: .command)
+                    .disabled(model.running == true)
+
+                    Picker("", selection: $model.targetClockHz) {
+                        Text("Unlimited").tag(0)
+                        Text("100 Hz").tag(100)
+                        Text("1 kHz").tag(1_000)
+                        Text("10 kHz").tag(10_000)
+                        Text("100 kHz").tag(100_000)
+                        Text("1 MHz").tag(1_000_000)
+                        Text("2 MHz").tag(2_000_000)
+                        Text("4 MHz").tag(4_000_000)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .help("Target CPU clock rate (cycles/sec). Applies on next Run.")
                     .disabled(model.running == true)
                 }
             } label: {
