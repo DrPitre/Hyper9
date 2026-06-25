@@ -1,2 +1,6 @@
 .DS_Store
 */xcuserdata/*
+.build/
+**/xcuserdata/
+Hyper9.xcodeproj/project.xcworkspace/xcshareddata/
+Hyper9.xcodeproj/xcshareddata/
