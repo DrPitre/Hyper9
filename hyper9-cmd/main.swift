@@ -22,7 +22,7 @@ func enableRawMode() {
     let attrs = UnsafeMutablePointer<termios>.allocate(capacity: 1)
     tcgetattr(STDIN_FILENO, attrs)
     var raw = attrs.pointee
-    raw.c_lflag &= ~(UInt(ECHO | ICANON)) // Turn off echo and canonical mode
+    raw.c_lflag &= ~(tcflag_t(ECHO | ICANON)) // Turn off echo and canonical mode
     tcsetattr(STDIN_FILENO, TCSANOW, &raw)
     attrs.deallocate()
     rawModeEnabled = true
@@ -33,7 +33,7 @@ func disableRawMode() {
     let attrs = UnsafeMutablePointer<termios>.allocate(capacity: 1)
     tcgetattr(STDIN_FILENO, attrs)
     var cooked = attrs.pointee
-    cooked.c_lflag |= (UInt(ECHO | ICANON))
+    cooked.c_lflag |= tcflag_t(ECHO | ICANON)
     tcsetattr(STDIN_FILENO, TCSANOW, &cooked)
     attrs.deallocate()
     rawModeEnabled = false
@@ -193,7 +193,13 @@ var nextScriptedInputCycle: UInt = 0
 
 // 2. Attempt to Load the Specified File
 do {
-    try turbo9.load(url: URL(fileURLWithPath: filePath))
+    let imageURL = URL(fileURLWithPath: filePath)
+    if imageURL.pathExtension == "img" {
+        let imageData = try Data(contentsOf: imageURL)
+        turbo9.loadMemorySnapshot(imageData)
+    } else {
+        try turbo9.load(url: imageURL)
+    }
 } catch {
     print("Error loading file at path \(filePath): \(error)")
     exit(EXIT_FAILURE)
